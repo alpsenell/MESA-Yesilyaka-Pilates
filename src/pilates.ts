@@ -48,8 +48,12 @@ export const DEFAULT_CONFIG: Config = {
   showRemaining: true,
 }
 
-// Fixed "now" so the demo always presents a consistent past/present/future.
-export const NOW = new Date('2026-08-03T09:30:00')
+/** Current wall-clock time. Callers use this so "past / soon / future" logic
+ *  stays in one place. The studio operates in Europe/Istanbul; the browser's
+ *  local time is assumed to match (server-side checks re-validate regardless). */
+export function now(): Date {
+  return new Date()
+}
 
 export const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
 export const DAYS_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
@@ -60,41 +64,6 @@ export const MONTHS = [
 
 export const START_H = 8
 export const END_H = 20
-
-const SEED: Array<[string, string, string, string, string, string]> = [
-  ['2026-08-03', '08:00', 'Elif', 'Yılmaz', 'A-02', '+90 532 114 22 88'],
-  ['2026-08-03', '17:00', 'Mert', 'Demir', 'C-11', ''],
-  ['2026-08-04', '09:00', 'Selin', 'Kaya', 'B-14', '+90 555 902 77 41'],
-  ['2026-08-04', '10:00', 'Zeynep', 'Arslan', 'D-07', ''],
-  ['2026-08-04', '18:00', 'Can', 'Öztürk', 'A-09', '+90 542 330 11 90'],
-  ['2026-08-05', '08:00', 'Selin', 'Kaya', 'B-14', '+90 555 902 77 41'],
-  ['2026-08-06', '11:00', 'Deniz', 'Aydın', 'B-03', ''],
-  ['2026-08-06', '12:00', 'Emre', 'Şahin', 'C-05', '+90 536 771 00 34'],
-  ['2026-08-06', '19:00', 'Ece', 'Koç', 'D-12', ''],
-  ['2026-08-07', '09:00', 'Selin', 'Kaya', 'B-14', '+90 555 902 77 41'],
-  ['2026-08-07', '15:00', 'Burak', 'Yıldız', 'A-15', ''],
-  ['2026-08-10', '08:00', 'Merve', 'Çelik', 'C-08', '+90 534 220 88 17'],
-  ['2026-08-11', '13:00', 'Ayşe', 'Polat', 'B-21', ''],
-  ['2026-08-12', '10:00', 'Selin', 'Kaya', 'B-14', '+90 555 902 77 41'],
-  ['2026-08-12', '16:00', 'Kerem', 'Tunç', 'D-02', ''],
-  ['2026-08-13', '08:00', 'Nil', 'Erdem', 'A-06', ''],
-  ['2026-08-14', '18:00', 'Barış', 'Acar', 'C-19', '+90 532 664 33 21'],
-  ['2026-08-18', '09:00', 'Pelin', 'Güneş', 'B-08', ''],
-  ['2026-08-20', '11:00', 'Onur', 'Kılıç', 'D-15', ''],
-  ['2026-08-25', '17:00', 'Sude', 'Aksoy', 'A-11', ''],
-]
-
-export function seedBookings(): Booking[] {
-  return SEED.map((b, i) => ({
-    id: 'b' + i,
-    date: b[0],
-    time: b[1],
-    first: b[2],
-    last: b[3],
-    villa: b[4],
-    phone: b[5],
-  }))
-}
 
 export function iso(y: number, m: number, d: number): string {
   return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0')
@@ -111,7 +80,7 @@ export function slotStart(date: string, time: string): Date {
 }
 
 export function hoursOut(date: string, time: string): number {
-  return (slotStart(date, time).getTime() - NOW.getTime()) / 3600000
+  return (slotStart(date, time).getTime() - now().getTime()) / 3600000
 }
 
 export function prettyDate(date: string): string {
