@@ -1,0 +1,58 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #f6f1e9;
+}
+
+body {
+  font-family: 'DM Sans', Helvetica, sans-serif;
+  color: #2b2620;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: #b0674c;
+  text-decoration: none;
+}
+
+a:hover {
+  color: #8e4f37;
+  text-decoration: underline;
+}
+
+input,
+button {
+  font-family: inherit;
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Focus/hover states that were expressed as style-focus / style-hover in the
+   original Design Component template. */
+.dc-field:focus {
+  border-color: #b0674c !important;
+  background: #fffdfa !important;
+}
+
+.dc-btn-ghost:hover {
+  background: #f6f1e9 !important;
+}
+
+.dc-btn-primary:hover {
+  background: #99553c !important;
+  border-color: #99553c !important;
+}
