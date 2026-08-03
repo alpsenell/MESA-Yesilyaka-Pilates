@@ -32,6 +32,8 @@ export interface StudioStore {
   bookedCount(date: string, time: string): number
   /** Individual bookings in a slot, or null when the caller (resident) must not see PII. */
   bookingsAt(date: string, time: string): Booking[] | null
+  /** Every booking in the loaded month (admin only; empty for residents). */
+  monthBookings: Booking[]
   isBlocked(date: string): boolean
   book(input: BookingInput): Promise<ActionResult>
   updateBooking(id: string, input: BookingInput): Promise<ActionResult>
@@ -101,6 +103,7 @@ export function useStudio(role: Role, config: Config = DEFAULT_CONFIG): StudioSt
     isAdmin ? bySlot[key(date, time)]?.length ?? 0 : availSlots[key(date, time)]?.booked ?? 0
   const bookingsAt = (date: string, time: string): Booking[] | null =>
     isAdmin ? bySlot[key(date, time)] ?? [] : null
+  const monthBookings: Booking[] = isAdmin ? Object.values(bySlot).flat() : []
   const isBlocked = (date: string) => blocked.indexOf(date) >= 0
 
   const book = async (input: BookingInput): Promise<ActionResult> => {
@@ -182,6 +185,7 @@ export function useStudio(role: Role, config: Config = DEFAULT_CONFIG): StudioSt
     capacityOf,
     bookedCount,
     bookingsAt,
+    monthBookings,
     isBlocked,
     book,
     updateBooking,

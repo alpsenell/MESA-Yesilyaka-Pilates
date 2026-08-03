@@ -201,7 +201,7 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
   const first = new Date(y, m, 1)
   const startPad = (first.getDay() + 6) % 7
   const daysIn = new Date(y, m + 1, 0).getDate()
-  const cellH = narrow ? 58 : expanded ? 132 : 92
+  const cellH = narrow ? 84 : expanded ? 132 : 92
   const cells: Cell[] = []
   for (let i = 0; i < startPad; i++) cells.push({ key: 'p' + i, isDay: false, style: { minHeight: cellH } })
   const nowD = now()
@@ -216,7 +216,7 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
     const clickable = isAdmin || (!isPast && !isBlocked)
     const style: CSSProperties = {
       minHeight: cellH,
-      padding: narrow ? '6px 5px' : '10px 11px',
+      padding: narrow ? '10px 9px' : '10px 11px',
       borderRadius: 12,
       cursor: clickable ? 'pointer' : 'default',
       border: isSel ? '1px solid ' + accent : '1px solid ' + (isBlocked ? '#EFE7DA' : '#EDE4D6'),
@@ -281,9 +281,9 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
       day: d,
       chips,
       statusText,
-      numStyle: { fontFamily: "'Instrument Serif', Georgia, serif", fontSize: narrow ? 16 : 20, color: dIso === todayIso ? accent : '#2B2620' },
-      dotStyle: { width: 6, height: 6, borderRadius: 999, background: dIso === todayIso ? accent : 'transparent', display: 'inline-block' },
-      statusStyle: { fontSize: narrow ? 9 : 11, letterSpacing: '0.02em', color: statusColor },
+      numStyle: { fontFamily: "'Instrument Serif', Georgia, serif", fontSize: narrow ? 22 : 20, color: dIso === todayIso ? accent : '#2B2620' },
+      dotStyle: { width: narrow ? 7 : 6, height: narrow ? 7 : 6, borderRadius: 999, background: dIso === todayIso ? accent : 'transparent', display: 'inline-block' },
+      statusStyle: { fontSize: narrow ? 11 : 11, letterSpacing: '0.02em', color: statusColor, lineHeight: 1.25 },
       style,
       onClick: () => {
         if (clickable) store.setSelected(dIso)
@@ -473,6 +473,21 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
     setFormError('')
   }
 
+  // ---- admin: month bookings grouped by resident (name + villa) ----
+  const summaryMap = new Map<string, { name: string; villa: string; count: number }>()
+  if (isAdmin) {
+    for (const b of store.monthBookings) {
+      const gkey = b.villa.toUpperCase() + '|' + (b.first + ' ' + b.last).trim().toLocaleLowerCase('tr')
+      const g = summaryMap.get(gkey)
+      if (g) g.count += 1
+      else summaryMap.set(gkey, { name: (b.first + ' ' + b.last).trim(), villa: b.villa.toUpperCase(), count: 1 })
+    }
+  }
+  const summaryRows = Array.from(summaryMap.values()).sort(
+    (a, b) => b.count - a.count || a.name.localeCompare(b.name, 'tr'),
+  )
+  const summaryTotal = store.monthBookings.length
+
   return (
     <div style={{ minHeight: '100vh', background: '#F6F1E9', padding: '24px 20px 64px' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
@@ -611,6 +626,40 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
             <div style={{ fontSize: 12, color: '#9C9083', paddingTop: 14, textWrap: 'pretty' }}>{policyNote}</div>
           </div>
         </div>
+
+        {/* Admin: month summary grouped by resident */}
+        {isAdmin && (
+          <div style={{ ...cardStyle, marginTop: narrow ? 14 : 20 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, paddingBottom: 14, borderBottom: '1px solid #F0E8DA' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#A79A8B' }}>Kişiye göre özet</div>
+                <div style={monthLabelStyle}>{MONTHS[m] + ' ' + y}</div>
+              </div>
+              <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9C9083' }}>
+                {store.loading ? 'Yükleniyor…' : summaryTotal + ' rezervasyon · ' + summaryRows.length + ' kişi'}
+              </div>
+            </div>
+            {summaryRows.length === 0 ? (
+              <div style={{ padding: '20px 6px', fontSize: 13, color: '#8C8073', textAlign: 'center' }}>
+                {store.loading ? '' : 'Bu ay için rezervasyon yok.'}
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: narrow ? '1fr' : 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8, paddingTop: 14 }}>
+                {summaryRows.map((r) => (
+                  <div key={r.villa + '|' + r.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', border: '1px solid #EFE7DA', borderRadius: 12, background: '#FBF7F1' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                      <div style={{ fontSize: 12, color: '#8C8073' }}>Villa {r.villa}</div>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: '#6E6357', background: '#F0E8DA', borderRadius: 999, padding: '5px 11px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {r.count} seans
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Booking form modal */}
         {!!form && (
