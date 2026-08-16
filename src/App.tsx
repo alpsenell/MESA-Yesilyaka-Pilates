@@ -95,7 +95,9 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
     toastTimer.current = setTimeout(() => setToast(''), 3200)
   }
 
-  const showRemaining = config.showRemaining ?? true
+  // The admin console needs the numbers to run the studio; the resident
+  // calendar is governed by the config flag.
+  const showRemaining = isAdmin || (config.showRemaining ?? true)
   const accent = config.accentColor ?? '#B0674C'
   const win = config.cancelWindowHours ?? 12
   const narrow = w < 900
@@ -304,13 +306,19 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
       statusText = narrow ? 'kapalı' : 'Stüdyo kapalı'
       statusColor = '#A79A8B'
     } else if (isPast) {
-      statusText = narrow ? '' : st.booked + ' seans'
+      statusText = showRemaining && !narrow ? st.booked + ' seans' : ''
       statusColor = '#A79A8B'
     } else if (full) {
       statusText = narrow ? 'dolu' : 'Tamamen dolu'
       statusColor = '#94422A'
     } else {
-      statusText = narrow ? st.open + ' boş' : showRemaining ? st.open + ' / ' + st.total + ' boş' : 'Uygun'
+      statusText = showRemaining
+        ? narrow
+          ? st.open + ' boş'
+          : st.open + ' / ' + st.total + ' boş'
+        : narrow
+          ? 'uygun'
+          : 'Uygun'
       statusColor = '#6E6357'
     }
     cells.push({
@@ -584,7 +592,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <div style={monthLabelStyle}>{MONTHS[m] + ' ' + y}</div>
                 <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#9C9083' }}>
-                  {store.loading ? 'Yükleniyor…' : mBooked + ' rezerve · ' + mOpen + ' boş'}
+                  {store.loading ? 'Yükleniyor…' : showRemaining ? mBooked + ' rezerve · ' + mOpen + ' boş' : ''}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>

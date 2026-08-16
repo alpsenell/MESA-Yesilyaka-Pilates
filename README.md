@@ -140,9 +140,13 @@ calendar tab). The default lives in three places that must agree:
 `DEFAULT_CAPACITY` in [`src/useStudio.ts`](src/useStudio.ts), and the
 `coalesce(…, 2)` fallbacks in `availability()` and `book_slot()`.
 
-Studio name, community label, phone, accent color, the cancellation window and
-the "show remaining counts" toggle live in `DEFAULT_CONFIG` in
-[`src/pilates.ts`](src/pilates.ts). The 12-hour cancellation window is also
+Studio name, community label, phone, accent color and the cancellation window
+live in `DEFAULT_CONFIG` in [`src/pilates.ts`](src/pilates.ts). `showRemaining`
+there is **off**: residents see whether a day or an hour is free (*Uygun* /
+*Tamamen dolu* / *Boş* / *Dolu*), never how many places are left, and the
+month's "x rezerve · y boş" line is hidden from them. Admins always see the
+counts, whatever the flag says. Set it back to `true` to show residents the
+numbers again. The 12-hour cancellation window is also
 enforced server-side in `cancel_booking` (`supabase/schema.sql`) — change both
 if you adjust it.
 

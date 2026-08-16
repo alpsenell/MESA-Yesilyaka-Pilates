@@ -47,7 +47,9 @@ export const DEFAULT_CONFIG: Config = {
   studioPhone: '+90 232 000 00 00',
   accentColor: '#B0674C',
   cancelWindowHours: 12,
-  showRemaining: true,
+  // Residents see whether a slot is free, never how free it is: no "3 / 12
+  // boş" on the calendar. Admins always see the counts regardless.
+  showRemaining: false,
 }
 
 /** Current wall-clock time. Callers use this so "past / soon / future" logic
