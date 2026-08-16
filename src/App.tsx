@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react'
 import {
   DAYS,
   DAYS_SHORT,
@@ -15,23 +15,13 @@ import {
 import type { StudioStore } from './useStudio'
 import type { Resident } from './auth'
 
-interface Chip {
-  key: string
-  label: string
-  style: CSSProperties
-  onClick: (e: MouseEvent) => void
-}
-
 interface Cell {
   key: string
   isDay: boolean
   style: CSSProperties
   day?: number
-  chips?: Chip[]
-  statusText?: string
   numStyle?: CSSProperties
   dotStyle?: CSSProperties
-  statusStyle?: CSSProperties
   onClick?: () => void
 }
 
@@ -69,7 +59,6 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   const isAdmin = store.role === 'admin'
   const signedIn = isAdmin || !!resident
 
-  const [layout, setLayout] = useState<'overview' | 'expanded'>('overview')
   const [w, setW] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1400))
   const [form, setForm] = useState<FormState | null>(null)
   const [f, setF] = useState<Fields>({ first: '', last: '', villa: '', phone: '' })
@@ -102,7 +91,6 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   const accent = config.accentColor ?? '#B0674C'
   const win = config.cancelWindowHours ?? 12
   const narrow = w < 900
-  const expanded = layout === 'expanded' && !narrow
 
   const sel = store.selected
   const y = store.year
@@ -207,17 +195,6 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   }
 
   // ---- styles ----
-  const tab = (on: boolean): CSSProperties => ({
-    padding: narrow ? '9px 13px' : '10px 18px',
-    borderRadius: 999,
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: narrow ? 12 : 13,
-    fontWeight: 500,
-    background: on ? '#FFFDFA' : 'transparent',
-    color: on ? '#2B2620' : '#8C8073',
-    boxShadow: on ? '0 1px 3px rgba(43,38,32,0.10)' : 'none',
-  })
   const ghost: CSSProperties = {
     padding: narrow ? '10px 13px' : '9px 14px',
     minHeight: narrow ? 44 : 0,
@@ -239,10 +216,13 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   const labelSpan: CSSProperties = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8C8073' }
 
   // ---- calendar cells ----
+  // The grid carries no words at all: a day is either open for business or
+  // rendered as disabled (past, fully booked, or the studio is closed). The
+  // legend under the calendar is what explains the three treatments.
   const first = new Date(y, m, 1)
   const startPad = (first.getDay() + 6) % 7
   const daysIn = new Date(y, m + 1, 0).getDate()
-  const cellH = narrow ? 84 : expanded ? 132 : 92
+  const cellH = narrow ? 68 : 84
   const cells: Cell[] = []
   for (let i = 0; i < startPad; i++) cells.push({ key: 'p' + i, isDay: false, style: { minHeight: cellH } })
   const nowD = now()
@@ -251,93 +231,46 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
     const dIso = iso(y, m, d)
     const isPast = new Date(dIso + 'T23:59:59') < nowD
     const isBlocked = store.isBlocked(dIso)
-    const st = dayStats(dIso)
     const isSel = dIso === sel
-    const full = st.open === 0 && !isBlocked
-    const clickable = isAdmin || (!isPast && !isBlocked)
+    const full = dayStats(dIso).open === 0 && !isBlocked
+    // Nothing left to book: shown greyed out, and inert for residents.
+    const unavailable = isPast || isBlocked || full
+    const clickable = isAdmin || !unavailable
     const style: CSSProperties = {
       minHeight: cellH,
       padding: narrow ? '9px 6px' : '10px 11px',
       borderRadius: 12,
       cursor: clickable ? 'pointer' : 'default',
-      border: isSel ? '1px solid ' + accent : '1px solid ' + (isBlocked ? '#EFE7DA' : '#EDE4D6'),
+      border: isSel ? '1px solid ' + accent : '1px solid ' + (unavailable ? '#EDE6DA' : '#EDE4D6'),
       background: isBlocked
         ? 'repeating-linear-gradient(135deg,#F6F1E9,#F6F1E9 6px,#F1EADF 6px,#F1EADF 12px)'
         : isSel
           ? '#FBF3ED'
-          : isPast
-            ? '#FAF7F1'
+          : unavailable
+            ? '#F4EFE7'
             : '#FFFDFA',
       boxShadow: isSel ? '0 0 0 3px rgba(176,103,76,0.10)' : 'none',
-      opacity: isPast && !isAdmin ? 0.5 : 1,
+      opacity: unavailable && !isAdmin ? 0.55 : 1,
       transition: 'background 0.15s, border-color 0.15s',
       overflow: 'hidden',
-    }
-    const chips: Chip[] = []
-    if (expanded && !isBlocked && (!isPast || isAdmin)) {
-      const open = times().filter(
-        (t) => store.capacityOf(dIso, t) - store.bookedCount(dIso, t) > 0 && (isAdmin || slotStart(dIso, t) > nowD),
-      )
-      open.slice(0, 4).forEach((t) =>
-        chips.push({
-          key: t,
-          label: t.replace(':', '.'),
-          style: { padding: '3px 7px', borderRadius: 7, border: '1px solid #EAE0D0', background: '#FBF7F1', color: '#6E6357', fontSize: 11, cursor: 'pointer' },
-          onClick: (e) => {
-            e.stopPropagation()
-            store.setSelected(dIso)
-            openBooking(dIso, t)
-          },
-        }),
-      )
-      if (open.length > 4)
-        chips.push({
-          key: 'more',
-          label: '+' + (open.length - 4),
-          style: { padding: '3px 7px', borderRadius: 7, border: '1px dashed #E4DACB', background: 'transparent', color: '#A79A8B', fontSize: 11, cursor: 'pointer' },
-          onClick: (e) => {
-            e.stopPropagation()
-            store.setSelected(dIso)
-          },
-        })
-    }
-    let statusText: string
-    let statusColor: string
-    if (isBlocked) {
-      statusText = narrow ? 'kapalı' : 'Stüdyo kapalı'
-      statusColor = '#A79A8B'
-    } else if (isPast) {
-      statusText = showRemaining && !narrow ? st.booked + ' seans' : ''
-      statusColor = '#A79A8B'
-    } else if (full) {
-      statusText = narrow ? 'dolu' : 'Tamamen dolu'
-      statusColor = '#94422A'
-    } else {
-      statusText = showRemaining
-        ? narrow
-          ? st.open + ' boş'
-          : st.open + ' / ' + st.total + ' boş'
-        : narrow
-          ? 'uygun'
-          : 'Uygun'
-      statusColor = '#6E6357'
     }
     cells.push({
       key: dIso,
       isDay: true,
       day: d,
-      chips,
-      statusText,
-      numStyle: { fontFamily: "'Instrument Serif', Georgia, serif", fontSize: narrow ? 22 : 20, color: dIso === todayIso ? accent : '#2B2620' },
+      numStyle: {
+        fontFamily: "'Instrument Serif', Georgia, serif",
+        fontSize: narrow ? 22 : 20,
+        color: dIso === todayIso ? accent : unavailable ? '#B3A897' : '#2B2620',
+      },
       dotStyle: { width: narrow ? 7 : 6, height: narrow ? 7 : 6, borderRadius: 999, background: dIso === todayIso ? accent : 'transparent', display: 'inline-block' },
-      statusStyle: { fontSize: narrow ? 10 : 11, letterSpacing: narrow ? 0 : '0.02em', color: statusColor, lineHeight: 1.25 },
       style,
       onClick: () => {
         if (clickable) store.setSelected(dIso)
       },
     })
   }
-  while (cells.length % 7 !== 0) cells.push({ key: 'e' + cells.length, isDay: false, style: { minHeight: cellH } })
+    while (cells.length % 7 !== 0) cells.push({ key: 'e' + cells.length, isDay: false, style: { minHeight: cellH } })
 
   let mOpen = 0
   let mBooked = 0
@@ -496,11 +429,10 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   const monthLabelStyle: CSSProperties = { fontFamily: "'Instrument Serif', Georgia, serif", fontSize: narrow ? 24 : 30 }
   const panelTitleStyle: CSSProperties = { fontFamily: "'Instrument Serif', Georgia, serif", fontSize: narrow ? 24 : 28, lineHeight: 1.1 }
   const navBtnStyle: CSSProperties = { width: narrow ? 44 : 38, height: narrow ? 44 : 38, borderRadius: 999, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#2B2620', fontSize: 16, cursor: 'pointer' }
-  const layoutTabsStyle: CSSProperties = { display: narrow ? 'none' : 'flex', gap: 2, padding: 3, background: '#EFE7DA', borderRadius: 999 }
   const lookupBtnStyle: CSSProperties = { padding: narrow ? '12px 16px' : '11px 18px', minHeight: narrow ? 44 : 0, borderRadius: 999, border: '1px solid #2B2620', background: '#2B2620', color: '#FBF7F1', fontSize: 13, fontWeight: 500, cursor: 'pointer' }
-  const mainGridStyle: CSSProperties = { display: 'grid', gap: narrow ? 14 : 20, paddingTop: narrow ? 16 : 22, gridTemplateColumns: narrow ? '1fr' : expanded ? '1fr' : 'minmax(0,1fr) 380px', alignItems: 'start' }
+  const mainGridStyle: CSSProperties = { display: 'grid', gap: narrow ? 14 : 20, paddingTop: narrow ? 16 : 22, gridTemplateColumns: narrow ? '1fr' : 'minmax(0,1fr) 380px', alignItems: 'start' }
   const cardStyle: CSSProperties = { background: '#FFFDFA', border: '1px solid #E9E0D2', borderRadius: 18, padding: narrow ? '16px 14px 18px' : '22px 22px 26px' }
-  const panelStyle: CSSProperties = { background: '#FFFDFA', border: '1px solid #E9E0D2', borderRadius: 18, padding: narrow ? '16px 14px 18px' : '22px 22px 24px', position: narrow || expanded ? 'static' : 'sticky', top: 24 }
+  const panelStyle: CSSProperties = { background: '#FFFDFA', border: '1px solid #E9E0D2', borderRadius: 18, padding: narrow ? '16px 14px 18px' : '22px 22px 24px', position: narrow ? 'static' : 'sticky', top: 24 }
   const formGridStyle: CSSProperties = { display: 'grid', gridTemplateColumns: narrow ? '1fr' : '1fr 1fr', gap: 14 }
   const blockBtnStyle: CSSProperties = { ...ghost, border: '1px solid ' + (selBlocked ? '#B7C4AE' : '#E0C4B8'), background: selBlocked ? '#F2F5EF' : '#FBF3EF', color: selBlocked ? '#5E7452' : '#94422A' }
 
@@ -561,10 +493,6 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
             <div style={{ fontSize: 14, color: '#7E7367', maxWidth: '46ch', textWrap: 'pretty' }}>{tagline}</div>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-            <div style={layoutTabsStyle}>
-              <button onClick={() => setLayout('overview')} style={tab(!expanded)}>Genel bakış</button>
-              <button onClick={() => setLayout('expanded')} style={tab(expanded)}>Detaylı</button>
-            </div>
             {!isAdmin && (
               <button onClick={openMine} style={lookupBtnStyle}>
                 Rezervasyonlarım
@@ -612,17 +540,9 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
               {cells.map((cell) => (
                 <div key={cell.key} onClick={cell.onClick} style={cell.style}>
                   {cell.isDay && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, height: '100%' }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
-                        <span style={cell.numStyle}>{cell.day}</span>
-                        <span style={cell.dotStyle}></span>
-                      </div>
-                      <div style={cell.statusStyle}>{cell.statusText}</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 'auto' }}>
-                        {cell.chips?.map((chip) => (
-                          <button key={chip.key} onClick={chip.onClick} style={chip.style}>{chip.label}</button>
-                        ))}
-                      </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
+                      <span style={cell.numStyle}>{cell.day}</span>
+                      <span style={cell.dotStyle}></span>
                     </div>
                   )}
                 </div>

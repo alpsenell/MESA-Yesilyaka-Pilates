@@ -142,12 +142,17 @@ calendar tab). The default lives in three places that must agree:
 
 Studio name, community label, phone, accent color and the cancellation window
 live in `DEFAULT_CONFIG` in [`src/pilates.ts`](src/pilates.ts). `showRemaining`
-there is **off**, for residents and admins alike: the calendar says whether a
-day or an hour is free (*Uygun* / *Tamamen dolu* / *Boş* / *Dolu*), never how
-many places are left, and the month's "x rezerve · y boş" line is hidden. The
-admin day panel still shows each slot's exact `booked / capacity` next to the
-– / + stepper, because that is the control for changing it. Set the flag back
-to `true` to show the counts again. The 12-hour cancellation window is also
+there is **off**, for residents and admins alike.
+
+The month grid carries no text beyond the date: a day is either open for
+booking or drawn as disabled — greyed out for past days and fully booked ones,
+hatched when the studio is closed — with the legend underneath explaining the
+three treatments. Residents cannot select a disabled day; admins still can, so
+they can manage it. Everything else lives in the day panel, which says whether
+each hour is *Boş* or *Dolu* (and, for admins, that slot's exact
+`booked / capacity` next to the – / + stepper, because that is the control for
+changing it). Set the flag back to `true` to show counts in the day panel
+again. The 12-hour cancellation window is also
 enforced server-side in `cancel_booking` (`supabase/schema.sql`) — change both
 if you adjust it.
 
