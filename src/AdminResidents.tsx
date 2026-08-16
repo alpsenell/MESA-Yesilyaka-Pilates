@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { adminDeleteResident, adminUpdateResident, fetchResidents, type AdminResident } from './api'
+import { MAX_VILLA, MIN_VILLA, isValidVilla, villaKey } from './auth'
 import type { Booking } from './pilates'
 import { MONTHS, prettyDate, timeLabel } from './pilates'
 
@@ -71,15 +72,25 @@ export default function AdminResidents({
       setError('Ad, soyad ve villa numarası zorunludur.')
       return
     }
+    if (!isValidVilla(draft.villa)) {
+      setError(`Villa numarası ${MIN_VILLA} ile ${MAX_VILLA} arasında bir sayı olmalıdır.`)
+      return
+    }
     setBusy(true)
     try {
-      await adminUpdateResident(id, draft)
+      await adminUpdateResident(id, { ...draft, villa: villaKey(draft.villa) })
       setEditId(null)
       await load()
       onChanged()
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Kaydedilemedi.'
-      setError(msg.includes('residents_villa_key_idx') ? 'Bu villa numarası başka bir hesapta kayıtlı.' : msg)
+      setError(
+        msg.includes('residents_villa_key_idx')
+          ? 'Bu villa numarası başka bir hesapta kayıtlı.'
+          : msg.includes('residents_villa_range')
+            ? `Villa numarası ${MIN_VILLA} ile ${MAX_VILLA} arasında olmalıdır.`
+            : msg,
+      )
     } finally {
       setBusy(false)
     }
@@ -152,7 +163,7 @@ export default function AdminResidents({
                       [
                         ['Ad', 'first'],
                         ['Soyad', 'last'],
-                        ['Villa numarası', 'villa'],
+                        [`Villa numarası (${MIN_VILLA}–${MAX_VILLA})`, 'villa'],
                         ['Telefon', 'phone'],
                       ] as Array<[string, keyof Draft]>
                     ).map(([label, k]) => (

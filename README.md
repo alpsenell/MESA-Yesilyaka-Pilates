@@ -26,9 +26,11 @@ In local dev, reach the admin build via `http://localhost:5173/?admin=1` (or
 
 - **Residents have real accounts.** Sign-up asks for name, surname, villa number
   and a password. Supabase Auth needs an e-mail, so the client derives a
-  synthetic one from the villa number (`villa-b14@villa.yesilyakasupilates.com`);
-  the resident only ever types their villa number. `B-14`, `b 14` and `B14` all
-  normalise to the same account, so **there is one account per villa**.
+  synthetic one from the villa number (`villa-343@villa.yesilyakasupilates.com`);
+  the resident only ever types their villa number. Villas are numbered
+  **1–500**, and `343`, `007` and ` 7 ` normalise to one account each, so
+  **there is one account per villa**. Override the address domain with
+  `VITE_VILLA_EMAIL_DOMAIN` if your Supabase project ever rejects the default.
 - **A resident can never see who booked anything.** The month view comes from
   `availability()`, which returns counts only, and RLS on `bookings` restricts
   `select` to `resident_id = auth.uid()` — other people's rows are never sent to
@@ -38,6 +40,11 @@ In local dev, reach the admin build via `http://localhost:5173/?admin=1` (or
   re-checks blocked days, past times, capacity and double-booking.
 - **Residents cancel only their own sessions** — `cancel_booking` verifies
   ownership and the 12-hour window server-side.
+- **Admin cancellations require a reason.** `admin_cancel_booking` refuses an
+  empty one, records it in `cancellation_notices` for the affected resident,
+  and only then deletes the booking. The resident sees it the next time they
+  sign in; `mark_notices_seen()` (not an UPDATE policy) clears it, so the
+  recipient can never rewrite the reason.
 - **Admins are rows in `public.admins`**, not merely "any authenticated user".
   The admin console checks `is_admin()` before rendering, and every admin RLS
   policy is gated on the same function.
@@ -49,13 +56,16 @@ In local dev, reach the admin build via `http://localhost:5173/?admin=1` (or
 1. Create a project at [supabase.com](https://supabase.com).
 2. In **SQL Editor**, paste and run [`supabase/schema.sql`](supabase/schema.sql).
    It creates the tables, RLS policies, RPCs, and demo seed data.
-   *Upgrading a database that predates resident accounts?* Run
-   [`supabase/migration-002-resident-auth.sql`](supabase/migration-002-resident-auth.sql)
-   instead — it adds everything in place and records every existing auth user
-   as an admin (review `public.admins` afterwards).
-3. **Authentication → Providers → Email**: turn **Confirm email** *off*. Resident
-   addresses are synthetic and receive no mail, so confirmation would lock
-   everyone out. Leave sign-ups enabled.
+   *Upgrading an existing database?* Run the migrations in order instead:
+   [`002-resident-auth.sql`](supabase/migration-002-resident-auth.sql) (adds
+   accounts in place and records every existing auth user as an admin — review
+   `public.admins` afterwards) then
+   [`003-villa-numbers-cancel-reason.sql`](supabase/migration-003-villa-numbers-cancel-reason.sql)
+   (numeric villa numbers 1–500 and mandatory cancellation reasons).
+3. **Authentication → Providers → Email**: turn **Confirm email** *off*. This is
+   not optional — the villa addresses are synthetic, so a confirmation mail
+   cannot be delivered and sign-up fails with *"Email address … is invalid"*.
+   Leave sign-ups enabled.
 4. Create staff logins under **Authentication → Users → Add user**, then list
    them as admins:
 
@@ -133,7 +143,9 @@ src/pilates.ts        Types, constants, date helpers, config
 src/Notice.tsx        Loading / setup / error screens
 supabase/schema.sql   Tables, RLS, RPCs, seed data
 supabase/migration-002-resident-auth.sql
-                      In-place upgrade for pre-accounts databases
+                      In-place upgrade: resident accounts
+supabase/migration-003-villa-numbers-cancel-reason.sql
+                      In-place upgrade: villa numbers 1–500, cancel reasons
 ```
 
 ## Managing residents
@@ -143,6 +155,11 @@ resident's total and upcoming session counts. From there you can search, expand
 a resident to see their sessions in the displayed month, edit their name / villa
 / phone (their existing bookings are relabelled automatically), or delete the
 account outright — which also removes their login and all of their bookings.
+
+When an admin cancels a resident's session, a reason is mandatory: it is stored
+against that resident and shown to them the next time they sign in, then marked
+seen. Guests added by an admin have no account, so their cancellations record
+the reason for the audit trail but notify nobody.
 
 Residents sign themselves up; there is no invite step. Forgotten passwords are
 handled by deleting the account and letting the household register again, or by

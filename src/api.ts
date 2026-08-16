@@ -154,8 +154,13 @@ export async function adminUpdateBooking(id: string, input: BookingInput): Promi
   if (error) throw new Error(error.message)
 }
 
-export async function adminDeleteBooking(id: string): Promise<void> {
-  const { error } = await supabase.from('bookings').delete().eq('id', id)
+/**
+ * Admin cancellation. The reason is mandatory: the RPC records it as a notice
+ * for the resident (skipped for admin-added guests, who have no account) and
+ * only then deletes the booking.
+ */
+export async function adminCancelBooking(id: string, reason: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_cancel_booking', { p_id: id, p_reason: reason })
   if (error) throw new Error(error.message)
 }
 
@@ -163,6 +168,36 @@ export async function adminSetCapacity(date: string, time: string, capacity: num
   const { error } = await supabase
     .from('slot_capacity')
     .upsert({ date, slot_time: time, capacity }, { onConflict: 'date,slot_time' })
+  if (error) throw new Error(error.message)
+}
+
+// ---------------------------------------------------------------------------
+// Cancellation notices — why an admin cancelled a resident's session.
+// ---------------------------------------------------------------------------
+export interface CancellationNotice {
+  id: string
+  date: string
+  time: string
+  reason: string
+  createdAt: string
+}
+
+/** Notices the signed-in resident has not acknowledged yet. */
+export async function fetchUnseenNotices(residentId: string): Promise<CancellationNotice[]> {
+  const { data, error } = await supabase
+    .from('cancellation_notices')
+    .select('*')
+    .eq('resident_id', residentId)
+    .is('seen_at', null)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (
+    (data ?? []) as Array<{ id: string; date: string; slot_time: string; reason: string; created_at: string }>
+  ).map((n) => ({ id: n.id, date: n.date, time: n.slot_time, reason: n.reason, createdAt: n.created_at }))
+}
+
+export async function markNoticesSeen(): Promise<void> {
+  const { error } = await supabase.rpc('mark_notices_seen')
   if (error) throw new Error(error.message)
 }
 

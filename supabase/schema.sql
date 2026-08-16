@@ -21,14 +21,17 @@ create extension if not exists "pgcrypto";
 -- Helpers
 -- ---------------------------------------------------------------------------
 
--- Canonical form of a villa number: "b 14" / "B-14" / "b14" all collapse to
--- "B14". Used for uniqueness and for deriving the login e-mail client-side.
+-- Canonical form of a villa number. Villas are numbered 1–500, and "007",
+-- "7" and " 7 " are all villa 7. Used for uniqueness and for deriving the
+-- login e-mail client-side.
 create or replace function public.villa_key(p_villa text)
 returns text
 language sql
 immutable
 as $$
-  select regexp_replace(upper(btrim(coalesce(p_villa, ''))), '[^A-Z0-9]', '', 'g');
+  select regexp_replace(
+           regexp_replace(upper(btrim(coalesce(p_villa, ''))), '[^A-Z0-9]', '', 'g'),
+           '^0+(?=.)', '');
 $$;
 
 create table if not exists public.admins (
@@ -61,7 +64,9 @@ create table if not exists public.residents (
   last_name  text not null,
   villa      text not null,
   phone      text not null default '',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- 1–500, spelled out as a regex so the constraint never has to cast text.
+  constraint residents_villa_range check (villa ~ '^([1-9][0-9]?|[1-4][0-9]{2}|500)$')
 );
 create unique index if not exists residents_villa_key_idx on public.residents (public.villa_key(villa));
 
@@ -94,6 +99,21 @@ create table if not exists public.slot_capacity (
   primary key (date, slot_time)
 );
 
+-- Why an admin cancelled a resident's session. Shown to that resident the
+-- next time they sign in, then marked seen.
+create table if not exists public.cancellation_notices (
+  id           uuid primary key default gen_random_uuid(),
+  resident_id  uuid not null references public.residents(id) on delete cascade,
+  date         date not null,
+  slot_time    text not null,
+  reason       text not null,
+  cancelled_by text,                       -- admin e-mail, for the audit trail
+  created_at   timestamptz not null default now(),
+  seen_at      timestamptz
+);
+create index if not exists cancellation_notices_resident_idx
+  on public.cancellation_notices (resident_id, seen_at);
+
 -- Keep the denormalised copies in step when an admin edits a profile.
 create or replace function public.sync_resident_bookings()
 returns trigger
@@ -125,14 +145,19 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare v_villa text;
 begin
   if new.raw_user_meta_data ? 'villa' then
+    v_villa := public.villa_key(new.raw_user_meta_data->>'villa');
+    if v_villa !~ '^([1-9][0-9]?|[1-4][0-9]{2}|500)$' then
+      raise exception 'Villa numarası 1 ile 500 arasında olmalıdır.';
+    end if;
     insert into public.residents (id, first_name, last_name, villa, phone)
     values (
       new.id,
       btrim(coalesce(new.raw_user_meta_data->>'first_name', '')),
       btrim(coalesce(new.raw_user_meta_data->>'last_name', '')),
-      upper(btrim(new.raw_user_meta_data->>'villa')),
+      v_villa,
       btrim(coalesce(new.raw_user_meta_data->>'phone', ''))
     );
   end if;
@@ -153,6 +178,7 @@ alter table public.residents     enable row level security;
 alter table public.admins        enable row level security;
 alter table public.blocked_days  enable row level security;
 alter table public.slot_capacity enable row level security;
+alter table public.cancellation_notices enable row level security;
 
 -- Admins — full access to the operational tables.
 drop policy if exists admin_all on public.bookings;
@@ -171,6 +197,10 @@ drop policy if exists admin_all on public.slot_capacity;
 create policy admin_all on public.slot_capacity
   for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists admin_all on public.cancellation_notices;
+create policy admin_all on public.cancellation_notices
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
 -- Residents — their own booking rows and their own profile, nothing else.
 -- This is what keeps "who booked Thursday 09:00" private: a resident simply
 -- has no readable row for anyone else's booking.
@@ -181,6 +211,13 @@ create policy own_bookings on public.bookings
 drop policy if exists own_profile_read on public.residents;
 create policy own_profile_read on public.residents
   for select to authenticated using (id = auth.uid());
+
+-- Residents read their own cancellation notices. There is no UPDATE policy on
+-- purpose — `mark_notices_seen()` does that, so the reason text can never be
+-- rewritten by its recipient.
+drop policy if exists own_notices on public.cancellation_notices;
+create policy own_notices on public.cancellation_notices
+  for select to authenticated using (resident_id = auth.uid());
 
 -- Deliberately no resident UPDATE policy: the villa number is the login
 -- identity, so profile edits go through an admin (or `book_slot`, which
@@ -341,6 +378,46 @@ as $$
   order by r.villa;
 $$;
 
+-- Admin cancellation: reason required, resident notified, booking removed.
+create or replace function public.admin_cancel_booking(p_id uuid, p_reason text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare r public.bookings;
+begin
+  if not public.is_admin() then raise exception 'Yetkiniz yok.'; end if;
+  if btrim(coalesce(p_reason, '')) = '' then
+    raise exception 'İptal nedeni zorunludur.';
+  end if;
+
+  select * into r from public.bookings where id = p_id;
+  if not found then raise exception 'Rezervasyon bulunamadı.'; end if;
+
+  -- Guests added by an admin have no account, so there is nobody to notify.
+  if r.resident_id is not null then
+    insert into public.cancellation_notices (resident_id, date, slot_time, reason, cancelled_by)
+    values (r.resident_id, r.date, r.slot_time, btrim(p_reason),
+            (select email from auth.users where id = auth.uid()));
+  end if;
+
+  delete from public.bookings where id = p_id;
+end;
+$$;
+
+-- Mark every unseen notice for the calling resident as read.
+create or replace function public.mark_notices_seen()
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.cancellation_notices
+     set seen_at = now()
+   where resident_id = auth.uid() and seen_at is null;
+$$;
+
 -- Delete a resident account outright (profile, bookings and login).
 create or replace function public.admin_delete_resident(p_id uuid)
 returns void
@@ -366,6 +443,8 @@ revoke all on function public.book_slot(date, text, text)     from public;
 revoke all on function public.cancel_booking(uuid)            from public;
 revoke all on function public.admin_residents()               from public;
 revoke all on function public.admin_delete_resident(uuid)     from public;
+revoke all on function public.admin_cancel_booking(uuid, text) from public;
+revoke all on function public.mark_notices_seen()             from public;
 revoke all on function public.is_admin()                      from public;
 
 grant execute on function public.availability(int, int)      to anon, authenticated;
@@ -373,6 +452,8 @@ grant execute on function public.book_slot(date, text, text) to authenticated;
 grant execute on function public.cancel_booking(uuid)        to authenticated;
 grant execute on function public.admin_residents()           to authenticated;
 grant execute on function public.admin_delete_resident(uuid) to authenticated;
+grant execute on function public.admin_cancel_booking(uuid, text) to authenticated;
+grant execute on function public.mark_notices_seen()            to authenticated;
 grant execute on function public.is_admin()                  to authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -399,25 +480,25 @@ insert into public.blocked_days (date) values ('2026-08-15'), ('2026-08-16')
 insert into public.bookings (date, slot_time, first_name, last_name, villa, phone)
 select d, t, fn, ln, vl, ph
 from (values
-  ('2026-08-03','08:00','Elif','Yılmaz','A-02','+90 532 114 22 88'),
-  ('2026-08-03','17:00','Mert','Demir','C-11',''),
-  ('2026-08-04','09:00','Selin','Kaya','B-14','+90 555 902 77 41'),
-  ('2026-08-04','10:00','Zeynep','Arslan','D-07',''),
-  ('2026-08-04','18:00','Can','Öztürk','A-09','+90 542 330 11 90'),
-  ('2026-08-05','08:00','Selin','Kaya','B-14','+90 555 902 77 41'),
-  ('2026-08-06','11:00','Deniz','Aydın','B-03',''),
-  ('2026-08-06','12:00','Emre','Şahin','C-05','+90 536 771 00 34'),
-  ('2026-08-06','19:00','Ece','Koç','D-12',''),
-  ('2026-08-07','09:00','Selin','Kaya','B-14','+90 555 902 77 41'),
-  ('2026-08-07','15:00','Burak','Yıldız','A-15',''),
-  ('2026-08-10','08:00','Merve','Çelik','C-08','+90 534 220 88 17'),
-  ('2026-08-11','13:00','Ayşe','Polat','B-21',''),
-  ('2026-08-12','10:00','Selin','Kaya','B-14','+90 555 902 77 41'),
-  ('2026-08-12','16:00','Kerem','Tunç','D-02',''),
-  ('2026-08-13','08:00','Nil','Erdem','A-06',''),
-  ('2026-08-14','18:00','Barış','Acar','C-19','+90 532 664 33 21'),
-  ('2026-08-18','09:00','Pelin','Güneş','B-08',''),
-  ('2026-08-20','11:00','Onur','Kılıç','D-15',''),
-  ('2026-08-25','17:00','Sude','Aksoy','A-11','')
+  ('2026-08-03','08:00','Elif','Yılmaz','9','+90 532 114 22 88'),
+  ('2026-08-03','17:00','Mert','Demir','47',''),
+  ('2026-08-04','09:00','Selin','Kaya','58','+90 555 902 77 41'),
+  ('2026-08-04','10:00','Zeynep','Arslan','32',''),
+  ('2026-08-04','18:00','Can','Öztürk','37','+90 542 330 11 90'),
+  ('2026-08-05','08:00','Selin','Kaya','58','+90 555 902 77 41'),
+  ('2026-08-06','11:00','Deniz','Aydın','14',''),
+  ('2026-08-06','12:00','Emre','Şahin','23','+90 536 771 00 34'),
+  ('2026-08-06','19:00','Ece','Koç','52',''),
+  ('2026-08-07','09:00','Selin','Kaya','58','+90 555 902 77 41'),
+  ('2026-08-07','15:00','Burak','Yıldız','61',''),
+  ('2026-08-10','08:00','Merve','Çelik','35','+90 534 220 88 17'),
+  ('2026-08-11','13:00','Ayşe','Polat','86',''),
+  ('2026-08-12','10:00','Selin','Kaya','58','+90 555 902 77 41'),
+  ('2026-08-12','16:00','Kerem','Tunç','12',''),
+  ('2026-08-13','08:00','Nil','Erdem','25',''),
+  ('2026-08-14','18:00','Barış','Acar','79','+90 532 664 33 21'),
+  ('2026-08-18','09:00','Pelin','Güneş','34',''),
+  ('2026-08-20','11:00','Onur','Kılıç','64',''),
+  ('2026-08-25','17:00','Sude','Aksoy','45','')
 ) as v(d, t, fn, ln, vl, ph)
 where not exists (select 1 from public.bookings);

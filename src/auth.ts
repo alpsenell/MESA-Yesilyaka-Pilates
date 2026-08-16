@@ -3,12 +3,17 @@ import { supabase } from './supabase'
 // ---------------------------------------------------------------------------
 // Residents sign in with "villa number + password". Supabase Auth wants an
 // e-mail, so we derive a stable synthetic one from the villa number. It is
-// never shown to the resident and never receives mail.
+// never shown to the resident and never receives mail — which is also why
+// "Confirm email" has to stay off in the Supabase project: a confirmation
+// mail to these addresses cannot be delivered and sign-up would fail.
 //
-// One account per villa: "B-14", "b 14" and "b14" all normalise to the same
-// key, so the household can never end up with two rival logins.
+// One account per villa: "7", "007" and " 7 " all normalise to villa 7.
 // ---------------------------------------------------------------------------
-const VILLA_EMAIL_DOMAIN = 'villa.yesilyakasupilates.com'
+const VILLA_EMAIL_DOMAIN = import.meta.env.VITE_VILLA_EMAIL_DOMAIN || 'villa.yesilyakasupilates.com'
+
+/** The community is numbered 1–500; there are no letter blocks. */
+export const MIN_VILLA = 1
+export const MAX_VILLA = 500
 
 /** Canonical villa key — must match `public.villa_key()` in the database. */
 export function villaKey(villa: string): string {
@@ -16,6 +21,14 @@ export function villaKey(villa: string): string {
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '')
+    .replace(/^0+(?=.)/, '')
+}
+
+export function isValidVilla(villa: string): boolean {
+  const key = villaKey(villa)
+  if (!/^[0-9]+$/.test(key)) return false
+  const n = Number(key)
+  return n >= MIN_VILLA && n <= MAX_VILLA
 }
 
 export function villaEmail(villa: string): string {
@@ -54,14 +67,18 @@ function authError(message: string): string {
   if (m.includes('password should be') || m.includes('password must')) {
     return 'Şifre en az 6 karakter olmalıdır.'
   }
-  if (m.includes('email not confirmed')) {
-    return 'Hesap henüz etkinleştirilmemiş. Lütfen yöneticinizle iletişime geçin.'
+  if (m.includes('email not confirmed') || m.includes('email address') || m.includes('invalid email')) {
+    // The villa addresses are synthetic, so this is always the same cause.
+    return 'Kayıt tamamlanamadı. Supabase → Authentication → Providers → Email altında “Confirm email” kapalı olmalıdır.'
   }
   if (m.includes('rate limit') || m.includes('too many')) {
     return 'Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin.'
   }
   if (m.includes('residents_villa_key_idx') || m.includes('duplicate key')) {
     return 'Bu villa numarası zaten kayıtlı.'
+  }
+  if (m.includes('residents_villa_range')) {
+    return `Villa numarası ${MIN_VILLA} ile ${MAX_VILLA} arasında olmalıdır.`
   }
   return message
 }
@@ -77,9 +94,12 @@ export interface RegisterInput {
 export type AuthResult = { ok: true } | { ok: false; error: string }
 
 export async function registerResident(input: RegisterInput): Promise<AuthResult> {
-  const villa = input.villa.trim().toUpperCase()
-  if (!input.first.trim() || !input.last.trim() || !villaKey(villa)) {
+  const villa = villaKey(input.villa)
+  if (!input.first.trim() || !input.last.trim() || !villa) {
     return { ok: false, error: 'Ad, soyad ve villa numarası zorunludur.' }
+  }
+  if (!isValidVilla(villa)) {
+    return { ok: false, error: `Villa numarası ${MIN_VILLA} ile ${MAX_VILLA} arasında bir sayı olmalıdır.` }
   }
   if (input.password.length < 6) return { ok: false, error: 'Şifre en az 6 karakter olmalıdır.' }
 
@@ -114,6 +134,9 @@ export async function registerResident(input: RegisterInput): Promise<AuthResult
 
 export async function loginResident(villa: string, password: string): Promise<AuthResult> {
   if (!villaKey(villa)) return { ok: false, error: 'Villa numaranızı girin.' }
+  if (!isValidVilla(villa)) {
+    return { ok: false, error: `Villa numarası ${MIN_VILLA} ile ${MAX_VILLA} arasında bir sayı olmalıdır.` }
+  }
   const { error } = await supabase.auth.signInWithPassword({ email: villaEmail(villa), password })
   if (error) return { ok: false, error: authError(error.message) }
   return { ok: true }

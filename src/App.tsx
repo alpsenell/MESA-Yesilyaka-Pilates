@@ -74,6 +74,10 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   const [formError, setFormError] = useState('')
   const [busy, setBusy] = useState(false)
   const [mineOpen, setMineOpen] = useState(false)
+  // Admin cancellation always needs a reason, so it goes through a dialog.
+  const [cancelling, setCancelling] = useState<Booking | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelError, setCancelError] = useState('')
   const [toast, setToast] = useState('')
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
@@ -159,9 +163,30 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
       setFormError(res.error)
     }
   }
-  async function cancelAdmin(b: Booking) {
-    const res = await store.cancel(b, true)
-    say(res.ok ? 'Seans iptal edildi.' : res.error)
+  function askCancelAdmin(b: Booking) {
+    setCancelling(b)
+    setCancelReason('')
+    setCancelError('')
+  }
+  async function confirmCancelAdmin() {
+    if (!cancelling) return
+    if (!cancelReason.trim()) {
+      setCancelError('İptal nedeni zorunludur.')
+      return
+    }
+    setBusy(true)
+    const res = await store.cancel(cancelling, true, cancelReason)
+    setBusy(false)
+    if (res.ok) {
+      setCancelling(null)
+      say(
+        cancelling.residentId
+          ? 'Seans iptal edildi. Sakin, giriş yaptığında nedeni görecek.'
+          : 'Seans iptal edildi.',
+      )
+    } else {
+      setCancelError(res.error)
+    }
   }
   function openMine() {
     if (!resident) {
@@ -368,7 +393,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
       onSecondary = () => holder && editBooking(holder)
       actionLabel = 'İptal et'
       actionStyle = { ...actBase, border: '1px solid #E0C4B8', background: '#FBF3EF', color: '#94422A', cursor: 'pointer' }
-      onAction = () => holder && cancelAdmin(holder)
+      onAction = () => holder && askCancelAdmin(holder)
     } else if (isAdmin) {
       statusText = past ? 'Geçti' : 'Boş'
       metaText = past ? 'Rezervasyon yok' : 'Birebir seans, bir saat'
@@ -710,7 +735,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <span style={labelSpan}>Villa numarası *</span>
-                    <input className="dc-field" value={f.villa} onChange={setField('villa')} placeholder="B-14" style={inputStyle} />
+                    <input className="dc-field" value={f.villa} onChange={setField('villa')} placeholder="343" style={inputStyle} />
                   </label>
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <span style={labelSpan}>Telefon (opsiyonel)</span>
@@ -789,6 +814,63 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
                     {store.loading ? 'Yükleniyor…' : 'Henüz bir rezervasyonunuz yok.'}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Admin cancellation — reason required */}
+        {!!cancelling && (
+          <div
+            onClick={() => !busy && setCancelling(null)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(43, 38, 32, 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, zIndex: 45 }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 460, background: '#FFFDFA', borderRadius: 20, padding: 26, animation: 'riseIn 0.22s ease both' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 16 }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#A79A8B' }}>Seansı iptal et</div>
+                <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 30, lineHeight: 1.1 }}>{timeLabel(cancelling.time)}</div>
+                <div style={{ fontSize: 13, color: '#7E7367' }}>
+                  {prettyDate(cancelling.date)} · {cancelling.first} {cancelling.last} · Villa {cancelling.villa}
+                </div>
+              </div>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={labelSpan}>İptal nedeni *</span>
+                <textarea
+                  className="dc-field"
+                  value={cancelReason}
+                  onChange={(e) => {
+                    setCancelReason(e.target.value)
+                    setCancelError('')
+                  }}
+                  rows={3}
+                  placeholder="Eğitmen rahatsızlandı, seans ileri bir tarihe alınacak."
+                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
+                />
+              </label>
+              <div style={{ fontSize: 12, color: '#9C9083', paddingTop: 8, textWrap: 'pretty' }}>
+                {cancelling.residentId
+                  ? 'Bu not, sakin siteye giriş yaptığında kendisine gösterilir.'
+                  : 'Bu misafirin hesabı yok — not yalnızca kayıt için tutulur.'}
+              </div>
+              {!!cancelError && (
+                <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 10, background: '#F7E4DC', color: '#94422A', fontSize: 13 }}>{cancelError}</div>
+              )}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 20, flexWrap: 'wrap' }}>
+                <button
+                  className="dc-btn-ghost"
+                  onClick={() => setCancelling(null)}
+                  disabled={busy}
+                  style={{ padding: '14px 20px', minHeight: 46, borderRadius: 999, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#2B2620', fontSize: 13, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
+                >
+                  Vazgeç
+                </button>
+                <button
+                  onClick={confirmCancelAdmin}
+                  disabled={busy}
+                  style={{ padding: '14px 24px', minHeight: 46, borderRadius: 999, border: '1px solid #94422A', background: '#94422A', color: '#FFFDFA', fontSize: 13, fontWeight: 500, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1 }}
+                >
+                  {busy ? 'İptal ediliyor…' : 'Seansı iptal et'}
+                </button>
               </div>
             </div>
           </div>

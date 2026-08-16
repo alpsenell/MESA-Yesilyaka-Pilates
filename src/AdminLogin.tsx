@@ -4,12 +4,14 @@ import { DEFAULT_CONFIG } from './pilates'
 
 const inputStyle: CSSProperties = { padding: 13, borderRadius: 10, border: '1px solid #E4DACB', background: '#FBF7F1', fontSize: 15, color: '#2B2620', outline: 'none' }
 const labelSpan: CSSProperties = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8C8073' }
+const revealBtn: CSSProperties = { position: 'absolute', right: 6, top: 6, bottom: 6, padding: '0 12px', borderRadius: 8, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#8C8073', fontSize: 12, cursor: 'pointer' }
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [showPw, setShowPw] = useState(false)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -35,7 +37,20 @@ export default function AdminLogin() {
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={labelSpan}>Şifre</span>
-            <input className="dc-field" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={inputStyle} />
+            <div style={{ position: 'relative', display: 'flex' }}>
+              <input
+                className="dc-field"
+                type={showPw ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                style={{ ...inputStyle, flex: 1, paddingRight: 76 }}
+              />
+              <button type="button" onClick={() => setShowPw((v) => !v)} aria-label={showPw ? 'Şifreyi gizle' : 'Şifreyi göster'} style={revealBtn}>
+                {showPw ? 'Gizle' : 'Göster'}
+              </button>
+            </div>
           </label>
           {!!error && <div style={{ padding: '11px 13px', borderRadius: 10, background: '#F7E4DC', color: '#94422A', fontSize: 13 }}>{error}</div>}
           <button

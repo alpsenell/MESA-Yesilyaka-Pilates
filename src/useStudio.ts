@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   adminCreateBooking,
-  adminDeleteBooking,
+  adminCancelBooking,
   adminSetBlocked,
   adminSetCapacity,
   adminUpdateBooking,
@@ -41,7 +41,8 @@ export interface StudioStore {
   isBlocked(date: string): boolean
   book(input: BookingInput): Promise<ActionResult>
   updateBooking(id: string, input: BookingInput): Promise<ActionResult>
-  cancel(booking: Booking, adminOverride: boolean): Promise<ActionResult>
+  /** Admin cancellations require a reason; residents cancel their own. */
+  cancel(booking: Booking, adminOverride: boolean, reason?: string): Promise<ActionResult>
   setCapacity(date: string, time: string, delta: number): Promise<void>
   toggleBlocked(date: string): Promise<void>
 }
@@ -143,12 +144,15 @@ export function useStudio(
     }
   }
 
-  const cancel = async (booking: Booking, adminOverride: boolean): Promise<ActionResult> => {
+  const cancel = async (booking: Booking, adminOverride: boolean, reason?: string): Promise<ActionResult> => {
     if (!adminOverride && hoursOut(booking.date, booking.time) < (config.cancelWindowHours ?? 12)) {
       return { ok: false, error: 'Seansa ' + (config.cancelWindowHours ?? 12) + ' saatten az kaldı — lütfen stüdyoyu arayın.' }
     }
+    if (adminOverride && !reason?.trim()) {
+      return { ok: false, error: 'İptal nedeni zorunludur.' }
+    }
     try {
-      if (adminOverride) await adminDeleteBooking(booking.id)
+      if (adminOverride) await adminCancelBooking(booking.id, reason!.trim())
       else await cancelBookingResident(booking.id)
       await load()
       return { ok: true }

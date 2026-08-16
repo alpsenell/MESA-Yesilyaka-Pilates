@@ -1,8 +1,21 @@
 import { useState, type CSSProperties, type FormEvent } from 'react'
-import { loginResident, registerResident } from './auth'
+import { MAX_VILLA, MIN_VILLA, loginResident, registerResident } from './auth'
 
 const inputStyle: CSSProperties = { padding: 13, borderRadius: 10, border: '1px solid #E4DACB', background: '#FBF7F1', fontSize: 15, color: '#2B2620', outline: 'none' }
 const labelSpan: CSSProperties = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8C8073' }
+const revealBtn: CSSProperties = {
+  position: 'absolute',
+  right: 6,
+  top: 6,
+  bottom: 6,
+  padding: '0 12px',
+  borderRadius: 8,
+  border: '1px solid #E4DACB',
+  background: '#FFFDFA',
+  color: '#8C8073',
+  fontSize: 12,
+  cursor: 'pointer',
+}
 const tabStyle = (on: boolean): CSSProperties => ({
   flex: 1,
   padding: '10px 14px',
@@ -38,12 +51,14 @@ export default function ResidentAuth({
   const [password2, setPassword2] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [showPw, setShowPw] = useState(false)
 
   function switchMode(next: Mode) {
     setMode(next)
     setError('')
     setPassword('')
     setPassword2('')
+    setShowPw(false)
   }
 
   async function onSubmit(e: FormEvent) {
@@ -68,24 +83,40 @@ export default function ResidentAuth({
     label: string,
     value: string,
     set: (v: string) => void,
-    extra: { type?: string; placeholder?: string; autoComplete?: string } = {},
-  ) => (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={labelSpan}>{label}</span>
-      <input
-        className="dc-field"
-        type={extra.type ?? 'text'}
-        autoComplete={extra.autoComplete}
-        placeholder={extra.placeholder}
-        value={value}
-        onChange={(e) => {
-          set(e.target.value)
-          setError('')
-        }}
-        style={inputStyle}
-      />
-    </label>
-  )
+    extra: { type?: string; placeholder?: string; autoComplete?: string; inputMode?: 'numeric' } = {},
+  ) => {
+    const isPassword = extra.type === 'password'
+    return (
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={labelSpan}>{label}</span>
+        <div style={{ position: 'relative', display: 'flex' }}>
+          <input
+            className="dc-field"
+            type={isPassword && showPw ? 'text' : (extra.type ?? 'text')}
+            autoComplete={extra.autoComplete}
+            inputMode={extra.inputMode}
+            placeholder={extra.placeholder}
+            value={value}
+            onChange={(e) => {
+              set(e.target.value)
+              setError('')
+            }}
+            style={{ ...inputStyle, flex: 1, paddingRight: isPassword ? 76 : 13 }}
+          />
+          {isPassword && (
+            <button
+              type="button"
+              onClick={() => setShowPw((v) => !v)}
+              aria-label={showPw ? 'Şifreyi gizle' : 'Şifreyi göster'}
+              style={revealBtn}
+            >
+              {showPw ? 'Gizle' : 'Göster'}
+            </button>
+          )}
+        </div>
+      </label>
+    )
+  }
 
   return (
     <div
@@ -120,7 +151,11 @@ export default function ResidentAuth({
               {field('Soyad *', last, setLast, { placeholder: 'Kaya', autoComplete: 'family-name' })}
             </div>
           )}
-          {field('Villa numarası *', villa, setVilla, { placeholder: 'B-14', autoComplete: 'username' })}
+          {field(`Villa numarası * (${MIN_VILLA}–${MAX_VILLA})`, villa, setVilla, {
+            placeholder: '343',
+            autoComplete: 'username',
+            inputMode: 'numeric',
+          })}
           {mode === 'register' && field('Telefon (opsiyonel)', phone, setPhone, { placeholder: '+90 532 000 00 00', autoComplete: 'tel' })}
           {field('Şifre *', password, setPassword, {
             type: 'password',
@@ -158,7 +193,7 @@ export default function ResidentAuth({
         <div style={{ fontSize: 12, color: '#9C9083', paddingTop: 16, textWrap: 'pretty' }}>
           {mode === 'login'
             ? 'Şifrenizi mi unuttunuz? Stüdyo yönetimiyle iletişime geçin.'
-            : 'Villa numaranız giriş adınızdır — “B-14”, “b 14” ve “B14” aynı hesaptır.'}
+            : `Villa numaranız giriş adınızdır — ${MIN_VILLA} ile ${MAX_VILLA} arasında bir sayı.`}
         </div>
       </div>
     </div>
