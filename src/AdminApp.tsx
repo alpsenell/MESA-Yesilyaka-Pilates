@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import App from './App'
 import AdminLogin from './AdminLogin'
 import AdminResidents from './AdminResidents'
+import AdminSessions from './AdminSessions'
 import Notice, { SetupNotice } from './Notice'
 import { checkIsAdmin } from './auth'
 import { isConfigured, supabase } from './supabase'
@@ -71,27 +72,73 @@ const logoutBtn: CSSProperties = {
   cursor: 'pointer',
 }
 
+type Tab = 'sessions' | 'calendar' | 'users'
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: 'sessions', label: 'Seanslı üyeler' },
+  { id: 'calendar', label: 'Takvim' },
+  { id: 'users', label: 'Üye yönetimi' },
+]
+
+const tabBtn = (on: boolean, narrow: boolean): CSSProperties => ({
+  flex: narrow ? '1 1 auto' : '0 0 auto',
+  padding: narrow ? '11px 12px' : '10px 20px',
+  minHeight: narrow ? 44 : 0,
+  borderRadius: 999,
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: narrow ? 12 : 13,
+  fontWeight: 500,
+  whiteSpace: 'nowrap',
+  background: on ? '#FFFDFA' : 'transparent',
+  color: on ? '#2B2620' : '#8C8073',
+  boxShadow: on ? '0 1px 3px rgba(43,38,32,0.10)' : 'none',
+})
+
 function AdminConsole({ username }: { username: string }) {
   const store = useStudio('admin')
+  const [tab, setTab] = useState<Tab>('sessions')
   const headerExtra = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <span style={{ fontSize: 12, color: '#8C8073', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{username}</span>
       <button className="dc-btn-ghost" onClick={() => supabase.auth.signOut()} style={logoutBtn}>Çıkış</button>
     </div>
   )
+  // The calendar tab is App's own body, so it passes no replacement.
   return (
     <App
       store={store}
       headerExtra={headerExtra}
-      footer={({ narrow }) => (
-        <AdminResidents
-          monthBookings={store.monthBookings}
-          year={store.year}
-          month={store.month}
-          narrow={narrow}
-          onChanged={store.refresh}
-        />
+      tabs={({ narrow }) => (
+        <div style={{ display: 'flex', gap: 2, padding: 3, background: '#EFE7DA', borderRadius: 999, marginTop: 18, overflowX: 'auto' }}>
+          {TABS.map((t) => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={tabBtn(tab === t.id, narrow)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
       )}
+      replaceBody={
+        tab === 'calendar'
+          ? undefined
+          : ({ narrow }) =>
+              tab === 'sessions' ? (
+                <AdminSessions
+                  narrow={narrow}
+                  onOpenDate={(date) => {
+                    store.setSelected(date)
+                    setTab('calendar')
+                  }}
+                />
+              ) : (
+                <AdminResidents
+                  monthBookings={store.monthBookings}
+                  year={store.year}
+                  month={store.month}
+                  narrow={narrow}
+                  onChanged={store.refresh}
+                />
+              )
+      }
     />
   )
 }

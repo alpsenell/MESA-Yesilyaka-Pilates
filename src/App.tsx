@@ -58,11 +58,13 @@ interface AppProps {
   onRequireLogin?: () => void
   /** Called after a booking may have updated the stored phone number. */
   onProfileChange?: () => void
-  /** Rendered inside the page container, below the calendar (admin panels). */
-  footer?: (ctx: { narrow: boolean }) => ReactNode
+  /** Rendered directly under the header — the admin console's tab bar. */
+  tabs?: (ctx: { narrow: boolean }) => ReactNode
+  /** When set, replaces the calendar + day panel entirely (admin sub-views). */
+  replaceBody?: (ctx: { narrow: boolean }) => ReactNode
 }
 
-export default function App({ store, headerExtra, resident = null, onRequireLogin, onProfileChange, footer }: AppProps) {
+export default function App({ store, headerExtra, resident = null, onRequireLogin, onProfileChange, tabs, replaceBody }: AppProps) {
   const { config } = store
   const isAdmin = store.role === 'admin'
   const signedIn = isAdmin || !!resident
@@ -252,7 +254,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
     const clickable = isAdmin || (!isPast && !isBlocked)
     const style: CSSProperties = {
       minHeight: cellH,
-      padding: narrow ? '10px 9px' : '10px 11px',
+      padding: narrow ? '9px 6px' : '10px 11px',
       borderRadius: 12,
       cursor: clickable ? 'pointer' : 'default',
       border: isSel ? '1px solid ' + accent : '1px solid ' + (isBlocked ? '#EFE7DA' : '#EDE4D6'),
@@ -319,7 +321,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
       statusText,
       numStyle: { fontFamily: "'Instrument Serif', Georgia, serif", fontSize: narrow ? 22 : 20, color: dIso === todayIso ? accent : '#2B2620' },
       dotStyle: { width: narrow ? 7 : 6, height: narrow ? 7 : 6, borderRadius: 999, background: dIso === todayIso ? accent : 'transparent', display: 'inline-block' },
-      statusStyle: { fontSize: narrow ? 11 : 11, letterSpacing: '0.02em', color: statusColor, lineHeight: 1.25 },
+      statusStyle: { fontSize: narrow ? 10 : 11, letterSpacing: narrow ? 0 : '0.02em', color: statusColor, lineHeight: 1.25 },
       style,
       onClick: () => {
         if (clickable) store.setSelected(dIso)
@@ -569,6 +571,12 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
           </div>
         )}
 
+        {tabs?.({ narrow })}
+
+        {replaceBody ? (
+          <div style={{ paddingTop: narrow ? 16 : 22 }}>{replaceBody({ narrow })}</div>
+        ) : (
+        <>
         <div style={mainGridStyle}>
           {/* Calendar */}
           <div style={cardStyle}>
@@ -705,7 +713,8 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
           </div>
         )}
 
-        {footer?.({ narrow })}
+        </>
+        )}
 
         {/* Booking form modal */}
         {!!form && (

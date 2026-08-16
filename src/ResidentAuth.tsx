@@ -146,7 +146,7 @@ export default function ResidentAuth({
 
         <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {mode === 'register' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
               {field('Ad *', first, setFirst, { placeholder: 'Selin', autoComplete: 'given-name' })}
               {field('Soyad *', last, setLast, { placeholder: 'Kaya', autoComplete: 'family-name' })}
             </div>

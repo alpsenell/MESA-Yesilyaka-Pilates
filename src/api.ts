@@ -129,6 +129,20 @@ export async function fetchMonthAdmin(year: number, month: number): Promise<Mont
   return { bySlot, caps, blocked: ((blk.data ?? []) as Array<{ date: string }>).map((b) => b.date) }
 }
 
+/** Every booking from today onwards, for the "who is coming" view. */
+export async function fetchUpcomingBookings(): Promise<Booking[]> {
+  const t = new Date()
+  const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .gte('date', today)
+    .order('date')
+    .order('slot_time')
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as BookingRow[]).map(toBooking)
+}
+
 export async function adminCreateBooking(input: BookingInput): Promise<void> {
   const { error } = await supabase.from('bookings').insert({
     date: input.date,

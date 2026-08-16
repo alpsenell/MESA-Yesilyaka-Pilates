@@ -146,7 +146,8 @@ src/ResidentAuth.tsx  Resident login / registration (villa number + password)
 src/auth.ts           Villa→e-mail mapping, sign-up/in, profile, admin check
 src/AdminApp.tsx      Auth + is_admin() gate, admin console, logout
 src/AdminLogin.tsx    Staff username/password login
-src/AdminResidents.tsx Registered residents: search, edit, delete, sessions
+src/AdminSessions.tsx  Admin tab: residents with upcoming sessions
+src/AdminResidents.tsx Admin tab: accounts — search, edit, delete
 src/App.tsx           Shared calendar + day panel (presentational)
 src/useStudio.ts      Data + mutations hook (resident vs. admin)
 src/api.ts            Supabase calls (RPCs for residents, tables for admins)
@@ -162,13 +163,15 @@ supabase/migration-004-admin-username.sql
                       In-place upgrade: staff sign in with a username
 ```
 
-## Managing residents
+## The admin console
 
-The admin console lists every registered account below the calendar, with each
-resident's total and upcoming session counts. From there you can search, expand
-a resident to see their sessions in the displayed month, edit their name / villa
-/ phone (their existing bookings are relabelled automatically), or delete the
-account outright — which also removes their login and all of their bookings.
+Three tabs:
+
+| Tab | What it is for |
+| --- | --- |
+| **Seanslı üyeler** (default) | Who is coming. Every resident holding an upcoming session, nearest first, with their phone number and session list. "Takvimde aç" jumps to that day on the calendar. Guests added by an admin appear too, marked *Misafir*. |
+| **Takvim** | The booking calendar: per-slot capacity, closing days, adding guests, editing and cancelling bookings, and the per-resident month summary. |
+| **Üye yönetimi** | Registered accounts, with total and upcoming session counts. Search, expand to see the month's sessions, edit name / villa / phone (existing bookings are relabelled automatically), or delete the account — which also removes the login and every booking it holds. |
 
 When an admin cancels a resident's session, a reason is mandatory: it is stored
 against that resident and shown to them the next time they sign in, then marked
