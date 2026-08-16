@@ -34,11 +34,19 @@ as $$
            '^0+(?=.)', '');
 $$;
 
+-- Studio staff. They sign in with `username` + password; Supabase Auth needs
+-- an address internally, so the account's e-mail is the synthetic
+-- `<username>@admin.yesilyakasupilates.com` (see ADMIN_EMAIL_DOMAIN in
+-- src/auth.ts — the two must agree). `email` keeps the original address of
+-- accounts that predate username login, purely as a restore value.
 create table if not exists public.admins (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  email   text,
-  created_at timestamptz not null default now()
+  user_id  uuid primary key references auth.users(id) on delete cascade,
+  username text not null,
+  email    text,
+  created_at timestamptz not null default now(),
+  constraint admins_username_format check (username ~ '^[a-zA-Z0-9._-]{2,32}$')
 );
+create unique index if not exists admins_username_idx on public.admins (lower(username));
 
 -- True when the caller is a studio admin. SECURITY DEFINER so that policies on
 -- other tables can consult it without granting anyone a read on `admins`.
@@ -459,12 +467,16 @@ grant execute on function public.is_admin()                  to authenticated;
 -- ---------------------------------------------------------------------------
 -- Admin accounts
 -- ---------------------------------------------------------------------------
--- Studio staff sign in with the e-mail/password account you create for them in
--- Supabase → Authentication → Users, then must be listed here:
+-- Create the account in Supabase → Authentication → Users → Add user with the
+-- e-mail `<username>@admin.yesilyakasupilates.com` and "Auto Confirm User"
+-- ticked, then list it here:
 --
---   insert into public.admins (user_id, email)
---   select id, email from auth.users where email = 'you@example.com'
---   on conflict do nothing;
+--   insert into public.admins (user_id, username, email)
+--   select id, 'ayse', email from auth.users
+--   where email = 'ayse@admin.yesilyakasupilates.com'
+--   on conflict (user_id) do update set username = excluded.username;
+--
+-- Staff then sign in at admin.<domain> with just "ayse" and their password.
 --
 -- Any auth user that has no `villa` metadata and is not in `admins` can do
 -- nothing at all.

@@ -55,7 +55,9 @@ function AdminGate() {
       </Notice>
     )
   }
-  return <AdminConsole email={session.user.email ?? ''} />
+  // The account e-mail is a synthetic `<username>@…` address; only ever show
+  // the username part of it.
+  return <AdminConsole username={(session.user.email ?? '').split('@')[0]} />
 }
 
 const logoutBtn: CSSProperties = {
@@ -69,11 +71,11 @@ const logoutBtn: CSSProperties = {
   cursor: 'pointer',
 }
 
-function AdminConsole({ email }: { email: string }) {
+function AdminConsole({ username }: { username: string }) {
   const store = useStudio('admin')
   const headerExtra = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <span style={{ fontSize: 12, color: '#8C8073', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</span>
+      <span style={{ fontSize: 12, color: '#8C8073', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{username}</span>
       <button className="dc-btn-ghost" onClick={() => supabase.auth.signOut()} style={logoutBtn}>Çıkış</button>
     </div>
   )

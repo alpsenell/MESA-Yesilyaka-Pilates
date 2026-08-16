@@ -11,6 +11,35 @@ import { supabase } from './supabase'
 // ---------------------------------------------------------------------------
 const VILLA_EMAIL_DOMAIN = import.meta.env.VITE_VILLA_EMAIL_DOMAIN || 'villa.yesilyakasupilates.com'
 
+// Staff do the same with a username. Must match the domain used in
+// supabase/migration-004-admin-username.sql.
+const ADMIN_EMAIL_DOMAIN = import.meta.env.VITE_ADMIN_EMAIL_DOMAIN || 'admin.yesilyakasupilates.com'
+
+/** Canonical username — must match the `admins_username_format` constraint. */
+export function usernameKey(username: string): string {
+  return username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
+}
+
+export function adminEmail(username: string): string {
+  return `${usernameKey(username)}@${ADMIN_EMAIL_DOMAIN}`
+}
+
+/** Sign in as studio staff. Nobody types an e-mail address anywhere. */
+export async function loginAdmin(username: string, password: string): Promise<AuthResult> {
+  const user = usernameKey(username)
+  if (!user) return { ok: false, error: 'Kullanıcı adınızı girin.' }
+  const { error } = await supabase.auth.signInWithPassword({ email: adminEmail(user), password })
+  if (error) {
+    return {
+      ok: false,
+      error: error.message.toLowerCase().includes('invalid login credentials')
+        ? 'Kullanıcı adı veya şifre hatalı.'
+        : authError(error.message),
+    }
+  }
+  return { ok: true }
+}
+
 /** The community is numbered 1–500; there are no letter blocks. */
 export const MIN_VILLA = 1
 export const MAX_VILLA = 500
@@ -68,8 +97,14 @@ function authError(message: string): string {
     return 'Şifre en az 6 karakter olmalıdır.'
   }
   if (m.includes('email not confirmed') || m.includes('email address') || m.includes('invalid email')) {
-    // The villa addresses are synthetic, so this is always the same cause.
-    return 'Kayıt tamamlanamadı. Supabase → Authentication → Providers → Email altında “Confirm email” kapalı olmalıdır.'
+    // Residents never see an address, so this is always the same cause: the
+    // project still has "Confirm email" on and tried to mail the synthetic
+    // account address. Keep the message human and log the fix for whoever is
+    // looking at the console.
+    console.warn(
+      'Sign-up failed on the account address. Supabase → Authentication → Providers → Email → turn "Confirm email" off.',
+    )
+    return 'Kayıt şu anda tamamlanamıyor. Lütfen stüdyo yönetimiyle iletişime geçin.'
   }
   if (m.includes('rate limit') || m.includes('too many')) {
     return 'Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin.'
@@ -123,10 +158,10 @@ export async function registerResident(input: RegisterInput): Promise<AuthResult
   if (!data.session) {
     const retry = await loginResident(villa, input.password)
     if (!retry.ok) {
-      return {
-        ok: false,
-        error: 'Hesap oluşturuldu ancak giriş yapılamadı. Supabase → Authentication → Providers → Email altında "Confirm email" kapalı olmalıdır.',
-      }
+      console.warn(
+        'Account created but no session. Supabase → Authentication → Providers → Email → turn "Confirm email" off.',
+      )
+      return { ok: false, error: 'Hesap oluşturuldu ancak giriş yapılamadı. Lütfen stüdyo yönetimiyle iletişime geçin.' }
     }
   }
   return { ok: true }

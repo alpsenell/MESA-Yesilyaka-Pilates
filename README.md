@@ -17,7 +17,7 @@ One app, routed by hostname:
 | Host | Who | Auth |
 | --- | --- | --- |
 | `yesilyakasupilates.com` (+ `www`) | Residents | villa number + password (self sign-up) |
-| `admin.yesilyakasupilates.com` | Studio staff | Supabase email + password |
+| `admin.yesilyakasupilates.com` | Studio staff | username + password |
 
 In local dev, reach the admin build via `http://localhost:5173/?admin=1` (or
 `http://admin.localhost:5173`).
@@ -47,7 +47,10 @@ In local dev, reach the admin build via `http://localhost:5173/?admin=1` (or
   recipient can never rewrite the reason.
 - **Admins are rows in `public.admins`**, not merely "any authenticated user".
   The admin console checks `is_admin()` before rendering, and every admin RLS
-  policy is gated on the same function.
+  policy is gated on the same function. Staff sign in with a **username**; as
+  with villas, the client turns it into a synthetic address
+  (`ayse@admin.yesilyakasupilates.com`). **No e-mail address is typed anywhere
+  in this application**, by residents or by staff.
 - The `service_role` key is never used in the frontend and must never be
   committed. Only the anon key belongs in `VITE_SUPABASE_ANON_KEY`.
 
@@ -61,19 +64,28 @@ In local dev, reach the admin build via `http://localhost:5173/?admin=1` (or
    accounts in place and records every existing auth user as an admin — review
    `public.admins` afterwards) then
    [`003-villa-numbers-cancel-reason.sql`](supabase/migration-003-villa-numbers-cancel-reason.sql)
-   (numeric villa numbers 1–500 and mandatory cancellation reasons).
+   (numeric villa numbers 1–500 and mandatory cancellation reasons) then
+   [`004-admin-username.sql`](supabase/migration-004-admin-username.sql)
+   (username logins for staff — it rewrites existing admin account addresses so
+   their current passwords keep working, keeping the original in
+   `admins.email`).
 3. **Authentication → Providers → Email**: turn **Confirm email** *off*. This is
-   not optional — the villa addresses are synthetic, so a confirmation mail
-   cannot be delivered and sign-up fails with *"Email address … is invalid"*.
+   not optional — the account addresses are synthetic and receive no mail, so
+   a confirmation step cannot be completed and sign-up fails with *"Email
+   address … is invalid"*. There is no other e-mail verification in the app.
    Leave sign-ups enabled.
-4. Create staff logins under **Authentication → Users → Add user**, then list
-   them as admins:
+4. Create staff logins under **Authentication → Users → Add user**, with the
+   address `<username>@admin.yesilyakasupilates.com` and **Auto Confirm User**
+   ticked, then list them as admins:
 
    ```sql
-   insert into public.admins (user_id, email)
-   select id, email from auth.users where email = 'you@example.com'
-   on conflict do nothing;
+   insert into public.admins (user_id, username, email)
+   select id, 'ayse', email from auth.users
+   where email = 'ayse@admin.yesilyakasupilates.com'
+   on conflict (user_id) do update set username = excluded.username;
    ```
+
+   They then sign in at `admin.…` with just `ayse` and their password.
 
 5. Copy **Project Settings → API → Project URL** and the **anon public** key.
 
@@ -133,7 +145,7 @@ src/ResidentApp.tsx   Resident session gate + wiring
 src/ResidentAuth.tsx  Resident login / registration (villa number + password)
 src/auth.ts           Villa→e-mail mapping, sign-up/in, profile, admin check
 src/AdminApp.tsx      Auth + is_admin() gate, admin console, logout
-src/AdminLogin.tsx    Supabase email/password login (staff)
+src/AdminLogin.tsx    Staff username/password login
 src/AdminResidents.tsx Registered residents: search, edit, delete, sessions
 src/App.tsx           Shared calendar + day panel (presentational)
 src/useStudio.ts      Data + mutations hook (resident vs. admin)
@@ -146,6 +158,8 @@ supabase/migration-002-resident-auth.sql
                       In-place upgrade: resident accounts
 supabase/migration-003-villa-numbers-cancel-reason.sql
                       In-place upgrade: villa numbers 1–500, cancel reasons
+supabase/migration-004-admin-username.sql
+                      In-place upgrade: staff sign in with a username
 ```
 
 ## Managing residents
