@@ -68,24 +68,27 @@ In local dev, reach the admin build via `http://localhost:5173/?admin=1` (or
    [`004-admin-username.sql`](supabase/migration-004-admin-username.sql)
    (username logins for staff — it rewrites existing admin account addresses so
    their current passwords keep working, keeping the original in
-   `admins.email`).
+   `admins.email`) then
+   [`005-create-admin-function.sql`](supabase/migration-005-create-admin-function.sql)
+   (`create_admin` / `set_admin_password`).
 3. **Authentication → Providers → Email**: turn **Confirm email** *off*. This is
    not optional — the account addresses are synthetic and receive no mail, so
    a confirmation step cannot be completed and sign-up fails with *"Email
    address … is invalid"*. There is no other e-mail verification in the app.
    Leave sign-ups enabled.
-4. Create staff logins under **Authentication → Users → Add user**, with the
-   address `<username>@admin.yesilyakasupilates.com` and **Auto Confirm User**
-   ticked, then list them as admins:
+4. Create staff logins in the **SQL Editor** — username and password, nothing
+   else:
 
    ```sql
-   insert into public.admins (user_id, username, email)
-   select id, 'ayse', email from auth.users
-   where email = 'ayse@admin.yesilyakasupilates.com'
-   on conflict (user_id) do update set username = excluded.username;
+   select public.create_admin('ayse', 'bir-sifre-secin');
    ```
 
-   They then sign in at `admin.…` with just `ayse` and their password.
+   They then sign in at `admin.…` with `ayse` and that password. Reset it with
+   `select public.set_admin_password('ayse', 'yeni-sifre');`, and remove them
+   with `delete from auth.users where id = (select user_id from public.admins
+   where username = 'ayse');`. `create_admin` is executable only from the SQL
+   editor — it is revoked from `anon` and `authenticated`, so no signed-in user
+   can mint an admin.
 
 5. Copy **Project Settings → API → Project URL** and the **anon public** key.
 
@@ -161,6 +164,8 @@ supabase/migration-003-villa-numbers-cancel-reason.sql
                       In-place upgrade: villa numbers 1–500, cancel reasons
 supabase/migration-004-admin-username.sql
                       In-place upgrade: staff sign in with a username
+supabase/migration-005-create-admin-function.sql
+                      In-place upgrade: create_admin() / set_admin_password()
 ```
 
 ## The admin console

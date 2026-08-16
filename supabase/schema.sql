@@ -465,18 +465,108 @@ grant execute on function public.mark_notices_seen()            to authenticated
 grant execute on function public.is_admin()                  to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- Creating admins (SQL editor only — never exposed to the API)
+-- ---------------------------------------------------------------------------
+
+-- `extensions` is on the search path because Supabase installs pgcrypto there.
+create or replace function public.create_admin(p_username text, p_password text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_user  text;
+  v_email text;
+  v_id    uuid;
+begin
+  v_user := lower(btrim(coalesce(p_username, '')));
+  if v_user !~ '^[a-z0-9._-]{2,32}$' then
+    raise exception 'Kullanıcı adı 2-32 karakter olmalı; harf, rakam, nokta, tire ve alt çizgi kullanılabilir.';
+  end if;
+  if length(coalesce(p_password, '')) < 8 then
+    raise exception 'Şifre en az 8 karakter olmalıdır.';
+  end if;
+
+  v_email := v_user || '@admin.yesilyakasupilates.com';
+
+  if exists (select 1 from public.admins where lower(username) = v_user)
+     or exists (select 1 from auth.users where email = v_email) then
+    raise exception 'Bu kullanıcı adı zaten kullanılıyor: %', v_user;
+  end if;
+
+  v_id := gen_random_uuid();
+
+  -- email_confirmed_at is set here, so the "Confirm email" project setting is
+  -- irrelevant for staff accounts: nothing is ever sent.
+  insert into auth.users (
+    id, instance_id, aud, role, email, encrypted_password,
+    email_confirmed_at, created_at, updated_at,
+    raw_app_meta_data, raw_user_meta_data
+  ) values (
+    v_id,
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    v_email,
+    crypt(p_password, gen_salt('bf', 10)),   -- bcrypt cost 10, as GoTrue uses
+    now(), now(), now(),
+    jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
+    '{}'::jsonb
+  );
+
+  insert into auth.identities (
+    id, user_id, provider_id, provider, identity_data,
+    last_sign_in_at, created_at, updated_at
+  ) values (
+    gen_random_uuid(), v_id, v_id::text, 'email',
+    jsonb_build_object('sub', v_id::text, 'email', v_email, 'email_verified', true),
+    now(), now(), now()
+  );
+
+  insert into public.admins (user_id, username, email) values (v_id, v_user, v_email);
+  return v_id;
+end;
+$$;
+
+create or replace function public.set_admin_password(p_username text, p_password text)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare v_id uuid;
+begin
+  if length(coalesce(p_password, '')) < 8 then
+    raise exception 'Şifre en az 8 karakter olmalıdır.';
+  end if;
+  select user_id into v_id from public.admins where lower(username) = lower(btrim(p_username));
+  if v_id is null then
+    raise exception 'Yönetici bulunamadı: %', p_username;
+  end if;
+  update auth.users
+     set encrypted_password = crypt(p_password, gen_salt('bf', 10)),
+         updated_at = now()
+   where id = v_id;
+end;
+$$;
+
+-- SQL editor only: no API role may mint or re-key an admin account.
+revoke all on function public.create_admin(text, text)       from public, anon, authenticated;
+revoke all on function public.set_admin_password(text, text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- Admin accounts
 -- ---------------------------------------------------------------------------
--- Create the account in Supabase → Authentication → Users → Add user with the
--- e-mail `<username>@admin.yesilyakasupilates.com` and "Auto Confirm User"
--- ticked, then list it here:
+-- Add a member of staff with one line in the SQL editor:
 --
---   insert into public.admins (user_id, username, email)
---   select id, 'ayse', email from auth.users
---   where email = 'ayse@admin.yesilyakasupilates.com'
---   on conflict (user_id) do update set username = excluded.username;
+--   select public.create_admin('ayse', 'bir-sifre-secin');
 --
--- Staff then sign in at admin.<domain> with just "ayse" and their password.
+-- They then sign in at admin.<domain> with "ayse" and that password. To reset
+-- it: select public.set_admin_password('ayse', 'yeni-sifre');
+-- To remove them:
+--   delete from auth.users
+--   where id = (select user_id from public.admins where username = 'ayse');
 --
 -- Any auth user that has no `villa` metadata and is not in `admins` can do
 -- nothing at all.
