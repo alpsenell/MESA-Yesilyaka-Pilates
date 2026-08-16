@@ -1,34 +1,87 @@
 -- ============================================================================
 -- Yeşilyaka Su · Pilates booking — database schema
 -- Run this in the Supabase SQL editor (or `supabase db push`) on a fresh project.
+-- For an existing database created before resident accounts existed, run
+-- `supabase/migration-002-resident-auth.sql` instead.
 --
 -- Design:
---   * Residents use the anon key and may ONLY call the four RPCs at the bottom
---     (availability / book_slot / villa_bookings / cancel_booking). They can
---     never bulk-read the bookings table, so names and phone numbers are not
---     exposed through the public key.
---   * Admins authenticate (Supabase Auth) and read/write the tables directly;
---     "any authenticated user is an admin" — only invited staff have accounts.
+--   * Residents have real accounts (Supabase Auth). One account per villa:
+--     the client derives a synthetic e-mail from the villa number, so the
+--     resident only ever types "villa number + password".
+--   * A resident may only ever see counts for other people's slots. The
+--     `availability` RPC returns numbers only, and RLS on `bookings` limits a
+--     resident to their own rows — names and villas of others are never sent.
+--   * Admins are rows in `public.admins`. They read/write the tables directly.
 --   * All slot times are local Europe/Istanbul wall-clock ("HH:00").
 -- ============================================================================
 
 create extension if not exists "pgcrypto";
 
 -- ---------------------------------------------------------------------------
+-- Helpers
+-- ---------------------------------------------------------------------------
+
+-- Canonical form of a villa number: "b 14" / "B-14" / "b14" all collapse to
+-- "B14". Used for uniqueness and for deriving the login e-mail client-side.
+create or replace function public.villa_key(p_villa text)
+returns text
+language sql
+immutable
+as $$
+  select regexp_replace(upper(btrim(coalesce(p_villa, ''))), '[^A-Z0-9]', '', 'g');
+$$;
+
+create table if not exists public.admins (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email   text,
+  created_at timestamptz not null default now()
+);
+
+-- True when the caller is a studio admin. SECURITY DEFINER so that policies on
+-- other tables can consult it without granting anyone a read on `admins`.
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from public.admins where user_id = auth.uid());
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
-create table if not exists public.bookings (
-  id         uuid primary key default gen_random_uuid(),
-  date       date not null,
-  slot_time  text not null,               -- 'HH:00' local time
+
+-- Resident profile, one row per auth user. Created automatically by the
+-- `on_auth_user_created` trigger from the sign-up metadata.
+create table if not exists public.residents (
+  id         uuid primary key references auth.users(id) on delete cascade,
   first_name text not null,
   last_name  text not null,
   villa      text not null,
   phone      text not null default '',
   created_at timestamptz not null default now()
 );
+create unique index if not exists residents_villa_key_idx on public.residents (public.villa_key(villa));
+
+create table if not exists public.bookings (
+  id          uuid primary key default gen_random_uuid(),
+  date        date not null,
+  slot_time   text not null,               -- 'HH:00' local time
+  -- Owning resident. NULL for walk-in guests added by an admin.
+  resident_id uuid references public.residents(id) on delete cascade,
+  -- Denormalised on purpose: an admin-added guest has no profile, and the
+  -- attendance sheet should keep the name that was used at booking time.
+  first_name  text not null,
+  last_name   text not null,
+  villa       text not null,
+  phone       text not null default '',
+  created_at  timestamptz not null default now()
+);
 create index if not exists bookings_date_idx on public.bookings (date);
 create index if not exists bookings_villa_idx on public.bookings (upper(villa));
+create index if not exists bookings_resident_idx on public.bookings (resident_id);
 
 create table if not exists public.blocked_days (
   date date primary key
@@ -41,25 +94,100 @@ create table if not exists public.slot_capacity (
   primary key (date, slot_time)
 );
 
+-- Keep the denormalised copies in step when an admin edits a profile.
+create or replace function public.sync_resident_bookings()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.bookings
+     set first_name = new.first_name,
+         last_name  = new.last_name,
+         villa      = new.villa
+   where resident_id = new.id;
+  return new;
+end;
+$$;
+
+drop trigger if exists residents_sync_bookings on public.residents;
+create trigger residents_sync_bookings
+  after update of first_name, last_name, villa on public.residents
+  for each row execute function public.sync_resident_bookings();
+
+-- Sign-up hook: turn the metadata passed to `auth.signUp` into a profile row.
+-- Accounts created without a `villa` claim (i.e. staff, from the dashboard)
+-- are left alone.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.raw_user_meta_data ? 'villa' then
+    insert into public.residents (id, first_name, last_name, villa, phone)
+    values (
+      new.id,
+      btrim(coalesce(new.raw_user_meta_data->>'first_name', '')),
+      btrim(coalesce(new.raw_user_meta_data->>'last_name', '')),
+      upper(btrim(new.raw_user_meta_data->>'villa')),
+      btrim(coalesce(new.raw_user_meta_data->>'phone', ''))
+    );
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
 -- ---------------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------------
 alter table public.bookings      enable row level security;
+alter table public.residents     enable row level security;
+alter table public.admins        enable row level security;
 alter table public.blocked_days  enable row level security;
 alter table public.slot_capacity enable row level security;
 
--- Admins (any authenticated user) — full access to every table.
+-- Admins — full access to the operational tables.
 drop policy if exists admin_all on public.bookings;
 create policy admin_all on public.bookings
-  for all to authenticated using (true) with check (true);
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists admin_all on public.residents;
+create policy admin_all on public.residents
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists admin_all on public.blocked_days;
 create policy admin_all on public.blocked_days
-  for all to authenticated using (true) with check (true);
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists admin_all on public.slot_capacity;
 create policy admin_all on public.slot_capacity
-  for all to authenticated using (true) with check (true);
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+-- Residents — their own booking rows and their own profile, nothing else.
+-- This is what keeps "who booked Thursday 09:00" private: a resident simply
+-- has no readable row for anyone else's booking.
+drop policy if exists own_bookings on public.bookings;
+create policy own_bookings on public.bookings
+  for select to authenticated using (resident_id = auth.uid());
+
+drop policy if exists own_profile_read on public.residents;
+create policy own_profile_read on public.residents
+  for select to authenticated using (id = auth.uid());
+
+-- Deliberately no resident UPDATE policy: the villa number is the login
+-- identity, so profile edits go through an admin (or `book_slot`, which
+-- refreshes the phone number as a SECURITY DEFINER).
+
+-- Nobody reads `admins` directly; `is_admin()` is the only door.
+-- (RLS is enabled with no permissive policy → deny by default.)
 
 -- Blocked days are not personal data — safe to read publicly so the resident
 -- calendar can render "studio closed" without an RPC round-trip per action.
@@ -68,10 +196,10 @@ create policy public_read on public.blocked_days
   for select using (true);
 
 -- NOTE: there is deliberately NO anon policy on bookings or slot_capacity.
--- Residents reach those only through the SECURITY DEFINER functions below.
+-- Anonymous visitors see the calendar only through `availability()` below.
 
 -- ---------------------------------------------------------------------------
--- Resident RPCs (SECURITY DEFINER, callable by anon)
+-- Public / resident RPCs (SECURITY DEFINER)
 -- ---------------------------------------------------------------------------
 
 -- Per-slot availability for a month — counts only, never any PII.
@@ -104,22 +232,24 @@ as $$
   full outer join c on b.date = c.date and b.slot_time = c.slot_time;
 $$;
 
--- Create a booking. Enforces validation, blocked days, past times and capacity.
-create or replace function public.book_slot(
-  p_date date, p_slot text, p_first text, p_last text, p_villa text, p_phone text
-) returns uuid
+-- Book a slot for the signed-in resident. Name and villa come from the
+-- profile — the client cannot book on someone else's behalf.
+create or replace function public.book_slot(p_date date, p_slot text, p_phone text default null)
+returns uuid
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
+  r        public.residents;
   v_cap    int;
   v_booked int;
   v_id     uuid;
   v_start  timestamptz;
 begin
-  if p_first is null or btrim(p_first) = '' or btrim(p_last) = '' or btrim(coalesce(p_villa,'')) = '' then
-    raise exception 'Ad, soyad ve villa numarası zorunludur.';
+  select * into r from public.residents where id = auth.uid();
+  if not found then
+    raise exception 'Rezervasyon için giriş yapmalısınız.';
   end if;
   if p_slot !~ '^\d{2}:00$' then
     raise exception 'Geçersiz saat.';
@@ -133,6 +263,11 @@ begin
     raise exception 'Geçmiş bir saat rezerve edilemez.';
   end if;
 
+  if exists (select 1 from public.bookings
+             where date = p_date and slot_time = p_slot and resident_id = r.id) then
+    raise exception 'Bu saat için zaten bir rezervasyonunuz var.';
+  end if;
+
   select coalesce(
            (select capacity from public.slot_capacity where date = p_date and slot_time = p_slot),
            1)
@@ -142,27 +277,20 @@ begin
     raise exception 'Bu saat dolu.';
   end if;
 
-  insert into public.bookings (date, slot_time, first_name, last_name, villa, phone)
-  values (p_date, p_slot, btrim(p_first), btrim(p_last), upper(btrim(p_villa)), btrim(coalesce(p_phone, '')))
+  if p_phone is not null and btrim(p_phone) <> '' and btrim(p_phone) <> r.phone then
+    update public.residents set phone = btrim(p_phone) where id = r.id;
+    r.phone := btrim(p_phone);
+  end if;
+
+  insert into public.bookings (date, slot_time, resident_id, first_name, last_name, villa, phone)
+  values (p_date, p_slot, r.id, r.first_name, r.last_name, r.villa, r.phone)
   returning id into v_id;
   return v_id;
 end;
 $$;
 
--- A single villa's bookings (residents look up their own by villa number).
-create or replace function public.villa_bookings(p_villa text)
-returns setof public.bookings
-language sql
-security definer
-set search_path = public
-as $$
-  select * from public.bookings
-  where upper(villa) = upper(btrim(p_villa))
-  order by date, slot_time;
-$$;
-
--- Resident self-cancel: must match the villa and be outside the 12h window.
-create or replace function public.cancel_booking(p_id uuid, p_villa text)
+-- Resident self-cancel: must own the booking and be outside the 12h window.
+create or replace function public.cancel_booking(p_id uuid)
 returns void
 language plpgsql
 security definer
@@ -176,8 +304,8 @@ begin
   if not found then
     raise exception 'Rezervasyon bulunamadı.';
   end if;
-  if upper(r.villa) <> upper(btrim(p_villa)) then
-    raise exception 'Villa numarası eşleşmiyor.';
+  if r.resident_id is distinct from auth.uid() then
+    raise exception 'Bu rezervasyon size ait değil.';
   end if;
   v_start := (r.date + (r.slot_time || ':00')::time) at time zone 'Europe/Istanbul';
   if v_start - now() < interval '12 hours' then
@@ -187,25 +315,87 @@ begin
 end;
 $$;
 
--- Lock down default grants, then expose only the RPCs to the anon role.
-revoke all on function public.availability(int, int)                         from public;
-revoke all on function public.book_slot(date, text, text, text, text, text)  from public;
-revoke all on function public.villa_bookings(text)                           from public;
-revoke all on function public.cancel_booking(uuid, text)                     from public;
+-- ---------------------------------------------------------------------------
+-- Admin RPCs
+-- ---------------------------------------------------------------------------
 
-grant execute on function public.availability(int, int)                        to anon, authenticated;
-grant execute on function public.book_slot(date, text, text, text, text, text) to anon, authenticated;
-grant execute on function public.villa_bookings(text)                          to anon, authenticated;
-grant execute on function public.cancel_booking(uuid, text)                    to anon, authenticated;
+-- Registered residents with their booking totals.
+create or replace function public.admin_residents()
+returns table (
+  id uuid, first_name text, last_name text, villa text, phone text,
+  created_at timestamptz, bookings_total int, bookings_upcoming int
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select r.id, r.first_name, r.last_name, r.villa, r.phone, r.created_at,
+         count(b.id)::int as bookings_total,
+         count(b.id) filter (
+           where (b.date + (b.slot_time || ':00')::time) at time zone 'Europe/Istanbul' > now()
+         )::int as bookings_upcoming
+  from public.residents r
+  left join public.bookings b on b.resident_id = r.id
+  where public.is_admin()
+  group by r.id
+  order by r.villa;
+$$;
+
+-- Delete a resident account outright (profile, bookings and login).
+create or replace function public.admin_delete_resident(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Yetkiniz yok.';
+  end if;
+  if not exists (select 1 from public.residents where id = p_id) then
+    raise exception 'Sakin bulunamadı.';
+  end if;
+  -- Cascades: auth.users → residents → bookings.
+  delete from auth.users where id = p_id;
+end;
+$$;
+
+-- Lock down default grants, then expose only what each role may call.
+revoke all on function public.availability(int, int)          from public;
+revoke all on function public.book_slot(date, text, text)     from public;
+revoke all on function public.cancel_booking(uuid)            from public;
+revoke all on function public.admin_residents()               from public;
+revoke all on function public.admin_delete_resident(uuid)     from public;
+revoke all on function public.is_admin()                      from public;
+
+grant execute on function public.availability(int, int)      to anon, authenticated;
+grant execute on function public.book_slot(date, text, text) to authenticated;
+grant execute on function public.cancel_booking(uuid)        to authenticated;
+grant execute on function public.admin_residents()           to authenticated;
+grant execute on function public.admin_delete_resident(uuid) to authenticated;
+grant execute on function public.is_admin()                  to authenticated;
 
 -- ---------------------------------------------------------------------------
--- Seed data (demo month: August 2026). Safe to delete in production.
+-- Admin accounts
+-- ---------------------------------------------------------------------------
+-- Studio staff sign in with the e-mail/password account you create for them in
+-- Supabase → Authentication → Users, then must be listed here:
+--
+--   insert into public.admins (user_id, email)
+--   select id, email from auth.users where email = 'you@example.com'
+--   on conflict do nothing;
+--
+-- Any auth user that has no `villa` metadata and is not in `admins` can do
+-- nothing at all.
+
+-- ---------------------------------------------------------------------------
+-- Seed data (demo). Safe to delete in production.
 -- ---------------------------------------------------------------------------
 insert into public.blocked_days (date) values ('2026-08-15'), ('2026-08-16')
   on conflict do nothing;
 
--- Only seed when the table is empty, so re-running this file is safe (bookings
--- have no natural unique key, so ON CONFLICT can't dedupe them).
+-- Guest bookings (no resident account attached) so a fresh database still shows
+-- a populated calendar. Only seeded when the table is empty.
 insert into public.bookings (date, slot_time, first_name, last_name, villa, phone)
 select d, t, fn, ln, vl, ph
 from (values

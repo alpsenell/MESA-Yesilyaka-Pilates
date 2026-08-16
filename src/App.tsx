@@ -3,6 +3,7 @@ import {
   DAYS,
   DAYS_SHORT,
   MONTHS,
+  hoursOut,
   iso,
   now,
   prettyDate,
@@ -12,6 +13,7 @@ import {
   type Booking,
 } from './pilates'
 import type { StudioStore } from './useStudio'
+import type { Resident } from './auth'
 
 interface Chip {
   key: string
@@ -47,9 +49,23 @@ interface Fields {
   phone: string
 }
 
-export default function App({ store, headerExtra }: { store: StudioStore; headerExtra?: ReactNode }) {
+interface AppProps {
+  store: StudioStore
+  headerExtra?: ReactNode
+  /** Signed-in resident, or null when the visitor is browsing anonymously. */
+  resident?: Resident | null
+  /** Called when an action needs a signed-in resident. */
+  onRequireLogin?: () => void
+  /** Called after a booking may have updated the stored phone number. */
+  onProfileChange?: () => void
+  /** Rendered inside the page container, below the calendar (admin panels). */
+  footer?: (ctx: { narrow: boolean }) => ReactNode
+}
+
+export default function App({ store, headerExtra, resident = null, onRequireLogin, onProfileChange, footer }: AppProps) {
   const { config } = store
   const isAdmin = store.role === 'admin'
+  const signedIn = isAdmin || !!resident
 
   const [layout, setLayout] = useState<'overview' | 'expanded'>('overview')
   const [w, setW] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1400))
@@ -57,10 +73,7 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
   const [f, setF] = useState<Fields>({ first: '', last: '', villa: '', phone: '' })
   const [formError, setFormError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [lookupOpen, setLookupOpen] = useState(false)
-  const [lookupVilla, setLookupVilla] = useState('')
-  const [lookupResults, setLookupResults] = useState<Booking[] | null>(null)
-  const [lookupLoading, setLookupLoading] = useState(false)
+  const [mineOpen, setMineOpen] = useState(false)
   const [toast, setToast] = useState('')
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
@@ -102,8 +115,16 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
 
   // ---- actions ----
   function openBooking(date: string, time: string) {
+    if (!isAdmin && !resident) {
+      onRequireLogin?.()
+      return
+    }
     setForm({ date, time, mode: isAdmin ? 'admin-add' : 'book' })
-    setF({ first: '', last: '', villa: '', phone: '' })
+    setF(
+      resident && !isAdmin
+        ? { first: resident.first, last: resident.last, villa: resident.villa, phone: resident.phone }
+        : { first: '', last: '', villa: '', phone: '' },
+    )
     setFormError('')
   }
   function editBooking(b: Booking) {
@@ -113,7 +134,9 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
   }
   async function submit() {
     if (!form) return
-    if (!f.first.trim() || !f.last.trim() || !f.villa.trim()) {
+    // Residents book as themselves — the server reads their profile, so only
+    // the admin "add a guest" form still collects a name.
+    if (isAdmin && (!f.first.trim() || !f.last.trim() || !f.villa.trim())) {
       setFormError('Ad, soyad ve villa numarası zorunludur.')
       return
     }
@@ -123,6 +146,7 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
     setBusy(false)
     if (res.ok) {
       setForm(null)
+      if (!isAdmin && f.phone.trim() !== (resident?.phone ?? '')) onProfileChange?.()
       say(
         form.mode === 'edit'
           ? 'Rezervasyon güncellendi.'
@@ -139,30 +163,17 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
     const res = await store.cancel(b, true)
     say(res.ok ? 'Seans iptal edildi.' : res.error)
   }
-  async function doLookup(villa: string) {
-    const v = villa.trim()
-    if (!v) {
-      setLookupResults(null)
+  function openMine() {
+    if (!resident) {
+      onRequireLogin?.()
       return
     }
-    setLookupLoading(true)
-    try {
-      const rows = await store.lookupVilla(v)
-      setLookupResults(rows)
-    } catch {
-      setLookupResults([])
-    } finally {
-      setLookupLoading(false)
-    }
+    setMineOpen(true)
   }
   async function cancelMine(b: Booking) {
+    // `store.cancel` reloads the month, which also refreshes `store.mine`.
     const res = await store.cancel(b, false)
-    if (res.ok) {
-      say('Seans serbest bırakıldı. Haber verdiğiniz için teşekkürler.')
-      doLookup(lookupVilla)
-    } else {
-      say(res.error)
-    }
+    say(res.ok ? 'Seans serbest bırakıldı. Haber verdiğiniz için teşekkürler.' : res.error)
   }
 
   // ---- styles ----
@@ -314,6 +325,7 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
     const past = slotStart(sel, t) <= nowD
     const bk = store.bookingsAt(sel, t) // null for residents
     const holder = bk && bk[0]
+    const own = isAdmin ? null : store.mineAt(sel, t)
 
     const rowStyle: CSSProperties = {
       display: 'flex',
@@ -363,6 +375,20 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
       actionLabel = 'Misafir ekle'
       actionStyle = { ...actBase, border: '1px solid ' + accent, background: '#FFFDFA', color: accent, cursor: 'pointer' }
       onAction = () => openBooking(sel, t)
+    } else if (own) {
+      // The resident's own session — the only booking they may ever see.
+      const soon = !past && hoursOut(sel, t) < win
+      statusText = past ? 'Tamamlandı' : 'Rezervasyonunuz'
+      metaText = 'Bu seans sizin adınıza ayrıldı.'
+      actionLabel = past ? 'Tamamlandı' : soon ? 'Stüdyoyu arayın' : 'İptal et'
+      actionStyle = {
+        ...actBase,
+        border: '1px solid ' + (past || soon ? '#EFE7DA' : '#E0C4B8'),
+        background: past || soon ? 'transparent' : '#FBF3EF',
+        color: past || soon ? '#B3A897' : '#94422A',
+        cursor: past || soon ? 'default' : 'pointer',
+      }
+      if (!past && !soon) onAction = () => cancelMine(own)
     } else {
       // resident — counts only, no PII, no cross-resident cancel
       if (past) {
@@ -372,8 +398,8 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
         actionStyle = { ...actBase, border: '1px solid #EFE7DA', background: 'transparent', color: '#C0B5A6', cursor: 'default' }
       } else if (open > 0) {
         statusText = showRemaining ? open + ' yer boş' : 'Boş'
-        metaText = 'Birebir seans, bir saat'
-        actionLabel = 'Rezerve et'
+        metaText = signedIn ? 'Birebir seans, bir saat' : 'Rezervasyon için giriş yapın'
+        actionLabel = signedIn ? 'Rezerve et' : 'Giriş yapın'
         actionStyle = { ...actBase, border: '1px solid ' + accent, background: accent, color: '#FFFDFA', cursor: 'pointer' }
         onAction = () => openBooking(sel, t)
       } else {
@@ -405,15 +431,15 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
     }
   })
 
-  // ---- lookup (resident "my bookings") ----
-  const lookupRows: MyBookingRow[] = (lookupResults ?? []).map((b) => {
+  // ---- resident "my bookings" ----
+  const mineRows: MyBookingRow[] = store.mine.map((b) => {
     const past = slotStart(b.date, b.time) <= nowD
     const soon = ((slotStart(b.date, b.time).getTime() - nowD.getTime()) / 3600000) < win
     return {
       key: b.id,
       when:
         DAYS[(new Date(b.date + 'T00:00:00').getDay() + 6) % 7] + ', ' + prettyDate(b.date) + ' · ' + timeLabel(b.time),
-      who: b.first + ' ' + b.last + ' · Villa ' + b.villa + (b.phone ? ' · ' + b.phone : ''),
+      who: 'Villa ' + b.villa + (b.phone ? ' · ' + b.phone : ''),
       cancelLabel: past ? 'Tamamlandı' : soon ? 'Stüdyoyu arayın' : 'İptal et',
       cancelStyle: {
         ...actBase,
@@ -504,14 +530,7 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
               <button onClick={() => setLayout('expanded')} style={tab(expanded)}>Detaylı</button>
             </div>
             {!isAdmin && (
-              <button
-                onClick={() => {
-                  setLookupOpen(true)
-                  setLookupResults(null)
-                  setLookupVilla('')
-                }}
-                style={lookupBtnStyle}
-              >
+              <button onClick={openMine} style={lookupBtnStyle}>
                 Rezervasyonlarım
               </button>
             )}
@@ -661,6 +680,8 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
           </div>
         )}
 
+        {footer?.({ narrow })}
+
         {/* Booking form modal */}
         {!!form && (
           <div
@@ -677,24 +698,40 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
                 <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 30, lineHeight: 1.1 }}>{formTitle}</div>
                 <div style={{ fontSize: 13, color: '#7E7367' }}>{formSubtitle}</div>
               </div>
-              <div style={formGridStyle}>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={labelSpan}>Ad *</span>
-                  <input className="dc-field" value={f.first} onChange={setField('first')} placeholder="Selin" style={inputStyle} />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={labelSpan}>Soyad *</span>
-                  <input className="dc-field" value={f.last} onChange={setField('last')} placeholder="Kaya" style={inputStyle} />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={labelSpan}>Villa numarası *</span>
-                  <input className="dc-field" value={f.villa} onChange={setField('villa')} placeholder="B-14" style={inputStyle} />
-                </label>
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={labelSpan}>Telefon (opsiyonel)</span>
-                  <input className="dc-field" value={f.phone} onChange={setField('phone')} placeholder="+90 532 000 00 00" style={inputStyle} />
-                </label>
-              </div>
+              {isAdmin ? (
+                <div style={formGridStyle}>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={labelSpan}>Ad *</span>
+                    <input className="dc-field" value={f.first} onChange={setField('first')} placeholder="Selin" style={inputStyle} />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={labelSpan}>Soyad *</span>
+                    <input className="dc-field" value={f.last} onChange={setField('last')} placeholder="Kaya" style={inputStyle} />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={labelSpan}>Villa numarası *</span>
+                    <input className="dc-field" value={f.villa} onChange={setField('villa')} placeholder="B-14" style={inputStyle} />
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={labelSpan}>Telefon (opsiyonel)</span>
+                    <input className="dc-field" value={f.phone} onChange={setField('phone')} placeholder="+90 532 000 00 00" style={inputStyle} />
+                  </label>
+                </div>
+              ) : (
+                // Residents book as themselves; the server takes the name and
+                // villa from their account, so only the phone stays editable.
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '13px 15px', borderRadius: 12, border: '1px solid #EFE7DA', background: '#FBF7F1' }}>
+                    <span style={labelSpan}>Rezervasyon sahibi</span>
+                    <span style={{ fontSize: 15, fontWeight: 500 }}>{f.first} {f.last}</span>
+                    <span style={{ fontSize: 12, color: '#8C8073' }}>Villa {f.villa}</span>
+                  </div>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={labelSpan}>Telefon (opsiyonel)</span>
+                    <input className="dc-field" value={f.phone} onChange={setField('phone')} placeholder="+90 532 000 00 00" style={inputStyle} />
+                  </label>
+                </div>
+              )}
               {!!formError && (
                 <div style={{ marginTop: 14, padding: '11px 13px', borderRadius: 10, background: '#F7E4DC', color: '#94422A', fontSize: 13 }}>{formError}</div>
               )}
@@ -723,31 +760,22 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
           </div>
         )}
 
-        {/* Resident lookup modal */}
-        {lookupOpen && (
-          <div onClick={() => setLookupOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(43, 38, 32, 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, zIndex: 40 }}>
+        {/* Resident "my bookings" modal */}
+        {mineOpen && (
+          <div onClick={() => setMineOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(43, 38, 32, 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, zIndex: 40 }}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, background: '#FFFDFA', borderRadius: 20, padding: 26, animation: 'riseIn 0.22s ease both', maxHeight: '92vh', overflow: 'auto' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 16 }}>
-                <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#A79A8B' }}>Rezervasyon bul</div>
-                <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 30, lineHeight: 1.1 }}>Villanızın seansları</div>
-                <div style={{ fontSize: 13, color: '#7E7367' }}>Yaklaşan seanslarınızı görmek ve iptal etmek için villa numaranızı girin.</div>
+                <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#A79A8B' }}>
+                  {resident ? 'Villa ' + resident.villa : 'Rezervasyonlarım'}
+                </div>
+                <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 30, lineHeight: 1.1 }}>Seanslarınız</div>
+                <div style={{ fontSize: 13, color: '#7E7367' }}>Seansınıza {win} saat kalana kadar buradan ücretsiz iptal edebilirsiniz.</div>
               </div>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  doLookup(lookupVilla)
-                }}
-                style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}
-              >
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 180 }}>
-                  <span style={labelSpan}>Villa numarası</span>
-                  <input className="dc-field" value={lookupVilla} onChange={(e) => setLookupVilla(e.target.value)} placeholder="B-14" style={inputStyle} />
-                </label>
-                <button type="submit" style={lookupBtnStyle}>{lookupLoading ? 'Aranıyor…' : 'Bul'}</button>
-                <button type="button" className="dc-btn-ghost" onClick={() => setLookupOpen(false)} style={{ padding: '14px 20px', minHeight: 46, borderRadius: 999, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#2B2620', fontSize: 13, cursor: 'pointer' }}>Kapat</button>
-              </form>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" className="dc-btn-ghost" onClick={() => setMineOpen(false)} style={{ padding: '12px 20px', minHeight: 44, borderRadius: 999, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#2B2620', fontSize: 13, cursor: 'pointer' }}>Kapat</button>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 16 }}>
-                {lookupRows.map((b) => (
+                {mineRows.map((b) => (
                   <div key={b.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px', border: '1px solid #EFE7DA', borderRadius: 12, background: '#FBF7F1', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                       <div style={{ fontSize: 14, fontWeight: 500 }}>{b.when}</div>
@@ -756,9 +784,9 @@ export default function App({ store, headerExtra }: { store: StudioStore; header
                     <button onClick={b.onCancel} style={b.cancelStyle}>{b.cancelLabel}</button>
                   </div>
                 ))}
-                {lookupResults !== null && lookupResults.length === 0 && !lookupLoading && (
+                {mineRows.length === 0 && (
                   <div style={{ padding: 18, border: '1px dashed #E4DACB', borderRadius: 12, fontSize: 13, color: '#8C8073', textAlign: 'center' }}>
-                    {lookupVilla.trim() ? lookupVilla.trim().toUpperCase() + ' villası için seans bulunamadı.' : 'Villa numaranızı girin.'}
+                    {store.loading ? 'Yükleniyor…' : 'Henüz bir rezervasyonunuz yok.'}
                   </div>
                 )}
               </div>

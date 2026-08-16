@@ -9,6 +9,7 @@ interface BookingRow {
   id: string
   date: string
   slot_time: string
+  resident_id: string | null
   first_name: string
   last_name: string
   villa: string
@@ -16,7 +17,16 @@ interface BookingRow {
 }
 
 function toBooking(r: BookingRow): Booking {
-  return { id: r.id, date: r.date, time: r.slot_time, first: r.first_name, last: r.last_name, villa: r.villa, phone: r.phone }
+  return {
+    id: r.id,
+    date: r.date,
+    time: r.slot_time,
+    residentId: r.resident_id,
+    first: r.first_name,
+    last: r.last_name,
+    villa: r.villa,
+    phone: r.phone,
+  }
 }
 
 export interface BookingInput {
@@ -66,26 +76,30 @@ export async function fetchAvailability(year: number, month: number): Promise<Mo
   return { slots, blocked: ((blk ?? []) as Array<{ date: string }>).map((b) => b.date) }
 }
 
+/** Book for the signed-in resident. Name and villa come from their profile. */
 export async function bookSlot(input: BookingInput): Promise<void> {
   const { error } = await supabase.rpc('book_slot', {
     p_date: input.date,
     p_slot: input.time,
-    p_first: input.first,
-    p_last: input.last,
-    p_villa: input.villa,
     p_phone: input.phone,
   })
   if (error) throw new Error(error.message)
 }
 
-export async function fetchVillaBookings(villa: string): Promise<Booking[]> {
-  const { data, error } = await supabase.rpc('villa_bookings', { p_villa: villa })
+/** The signed-in resident's own bookings — RLS hides everyone else's. */
+export async function fetchMyBookings(residentId: string): Promise<Booking[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('resident_id', residentId)
+    .order('date')
+    .order('slot_time')
   if (error) throw new Error(error.message)
   return ((data ?? []) as BookingRow[]).map(toBooking)
 }
 
-export async function cancelBookingResident(id: string, villa: string): Promise<void> {
-  const { error } = await supabase.rpc('cancel_booking', { p_id: id, p_villa: villa })
+export async function cancelBookingResident(id: string): Promise<void> {
+  const { error } = await supabase.rpc('cancel_booking', { p_id: id })
   if (error) throw new Error(error.message)
 }
 
@@ -149,6 +163,66 @@ export async function adminSetCapacity(date: string, time: string, capacity: num
   const { error } = await supabase
     .from('slot_capacity')
     .upsert({ date, slot_time: time, capacity }, { onConflict: 'date,slot_time' })
+  if (error) throw new Error(error.message)
+}
+
+export interface AdminResident {
+  id: string
+  first: string
+  last: string
+  villa: string
+  phone: string
+  createdAt: string
+  total: number
+  upcoming: number
+}
+
+export async function fetchResidents(): Promise<AdminResident[]> {
+  const { data, error } = await supabase.rpc('admin_residents')
+  if (error) throw new Error(error.message)
+  return (
+    (data ?? []) as Array<{
+      id: string
+      first_name: string
+      last_name: string
+      villa: string
+      phone: string
+      created_at: string
+      bookings_total: number
+      bookings_upcoming: number
+    }>
+  ).map((r) => ({
+    id: r.id,
+    first: r.first_name,
+    last: r.last_name,
+    villa: r.villa,
+    phone: r.phone,
+    createdAt: r.created_at,
+    total: r.bookings_total,
+    upcoming: r.bookings_upcoming,
+  }))
+}
+
+/** Edit a resident's profile. A trigger rewrites their bookings to match. */
+export async function adminUpdateResident(
+  id: string,
+  input: { first: string; last: string; villa: string; phone: string },
+): Promise<void> {
+  const { error } = await supabase
+    .from('residents')
+    .update({
+      first_name: input.first.trim(),
+      last_name: input.last.trim(),
+      villa: input.villa.trim().toUpperCase(),
+      phone: input.phone.trim(),
+    })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Remove the account, its profile and all of its bookings. */
+export async function adminDeleteResident(id: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_delete_resident', { p_id: id })
   if (error) throw new Error(error.message)
 }
 

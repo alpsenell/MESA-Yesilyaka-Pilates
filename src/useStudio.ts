@@ -9,7 +9,7 @@ import {
   cancelBookingResident,
   fetchAvailability,
   fetchMonthAdmin,
-  fetchVillaBookings,
+  fetchMyBookings,
   type BookingInput,
 } from './api'
 import { DEFAULT_CONFIG, hoursOut, type Booking, type Config, type Role } from './pilates'
@@ -34,20 +34,27 @@ export interface StudioStore {
   bookingsAt(date: string, time: string): Booking[] | null
   /** Every booking in the loaded month (admin only; empty for residents). */
   monthBookings: Booking[]
+  /** The signed-in resident's own bookings (all dates). Empty for admins. */
+  mine: Booking[]
+  /** The resident's own booking in a slot, if any — lets the calendar mark it. */
+  mineAt(date: string, time: string): Booking | null
   isBlocked(date: string): boolean
   book(input: BookingInput): Promise<ActionResult>
   updateBooking(id: string, input: BookingInput): Promise<ActionResult>
   cancel(booking: Booking, adminOverride: boolean): Promise<ActionResult>
   setCapacity(date: string, time: string, delta: number): Promise<void>
   toggleBlocked(date: string): Promise<void>
-  lookupVilla(villa: string): Promise<Booking[]>
 }
 
 function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : 'Bir hata oluştu. Lütfen tekrar deneyin.'
 }
 
-export function useStudio(role: Role, config: Config = DEFAULT_CONFIG): StudioStore {
+export function useStudio(
+  role: Role,
+  residentId: string | null = null,
+  config: Config = DEFAULT_CONFIG,
+): StudioStore {
   const isAdmin = role === 'admin'
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
@@ -63,6 +70,7 @@ export function useStudio(role: Role, config: Config = DEFAULT_CONFIG): StudioSt
   const [bySlot, setBySlot] = useState<Record<string, Booking[]>>({})
   const [caps, setCaps] = useState<Record<string, number>>({})
   const [blocked, setBlocked] = useState<string[]>([])
+  const [mine, setMine] = useState<Booking[]>([])
 
   const reqId = useRef(0)
 
@@ -78,10 +86,16 @@ export function useStudio(role: Role, config: Config = DEFAULT_CONFIG): StudioSt
         setCaps(data.caps)
         setBlocked(data.blocked)
       } else {
-        const data = await fetchAvailability(year, month)
+        // Residents get counts only for the month, plus their own bookings in
+        // full — RLS makes sure that second query can never return anyone else.
+        const [data, own] = await Promise.all([
+          fetchAvailability(year, month),
+          residentId ? fetchMyBookings(residentId) : Promise.resolve([]),
+        ])
         if (id !== reqId.current) return
         setAvailSlots(data.slots)
         setBlocked(data.blocked)
+        setMine(own)
       }
     } catch (e) {
       if (id !== reqId.current) return
@@ -89,7 +103,7 @@ export function useStudio(role: Role, config: Config = DEFAULT_CONFIG): StudioSt
     } finally {
       if (id === reqId.current) setLoading(false)
     }
-  }, [isAdmin, year, month])
+  }, [isAdmin, year, month, residentId])
 
   useEffect(() => {
     load()
@@ -104,6 +118,8 @@ export function useStudio(role: Role, config: Config = DEFAULT_CONFIG): StudioSt
   const bookingsAt = (date: string, time: string): Booking[] | null =>
     isAdmin ? bySlot[key(date, time)] ?? [] : null
   const monthBookings: Booking[] = isAdmin ? Object.values(bySlot).flat() : []
+  const mineAt = (date: string, time: string): Booking | null =>
+    mine.find((b) => b.date === date && b.time === time) ?? null
   const isBlocked = (date: string) => blocked.indexOf(date) >= 0
 
   const book = async (input: BookingInput): Promise<ActionResult> => {
@@ -133,7 +149,7 @@ export function useStudio(role: Role, config: Config = DEFAULT_CONFIG): StudioSt
     }
     try {
       if (adminOverride) await adminDeleteBooking(booking.id)
-      else await cancelBookingResident(booking.id, booking.villa)
+      else await cancelBookingResident(booking.id)
       await load()
       return { ok: true }
     } catch (e) {
@@ -162,8 +178,6 @@ export function useStudio(role: Role, config: Config = DEFAULT_CONFIG): StudioSt
     }
   }
 
-  const lookupVilla = (villa: string) => fetchVillaBookings(villa)
-
   return {
     role,
     config,
@@ -186,12 +200,13 @@ export function useStudio(role: Role, config: Config = DEFAULT_CONFIG): StudioSt
     bookedCount,
     bookingsAt,
     monthBookings,
+    mine,
+    mineAt,
     isBlocked,
     book,
     updateBooking,
     cancel,
     setCapacity,
     toggleBlocked,
-    lookupVilla,
   }
 }

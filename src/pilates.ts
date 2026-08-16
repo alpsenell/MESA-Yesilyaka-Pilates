@@ -5,6 +5,8 @@ export interface Booking {
   id: string
   date: string // ISO yyyy-mm-dd
   time: string // HH:00
+  /** Owning resident account; null for a guest added by an admin. */
+  residentId?: string | null
   first: string
   last: string
   villa: string
