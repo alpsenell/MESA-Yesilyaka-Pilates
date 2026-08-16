@@ -148,11 +148,13 @@ The month grid carries no text beyond the date: a day is either open for
 booking or drawn as disabled — greyed out for past days and fully booked ones,
 hatched when the studio is closed — with the legend underneath explaining the
 three treatments. Residents cannot select a disabled day; admins still can, so
-they can manage it. Everything else lives in the day panel, which says whether
-each hour is *Boş* or *Dolu* (and, for admins, that slot's exact
-`booked / capacity` next to the – / + stepper, because that is the control for
-changing it). Set the flag back to `true` to show counts in the day panel
-again. The 12-hour cancellation window is also
+they can manage it.
+
+Availability lives in the day panel instead, per hour: *2 boş*, *1 boş · 1
+dolu*, *Dolu*. Admins additionally get that slot's `booked / capacity` beside
+the – / + stepper, because that is the control for changing it. The
+`showRemaining` flag now only governs the two month-level summaries (the
+calendar header line and the selected day's free-hours count). The 12-hour cancellation window is also
 enforced server-side in `cancel_booking` (`supabase/schema.sql`) — change both
 if you adjust it.
 

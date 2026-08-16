@@ -287,6 +287,14 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   const selStats = dayStats(sel)
 
   // ---- day-panel slots ----
+  // The grid says nothing, so this is where availability lives: how many
+  // places are free, and how many are already taken.
+  function seatText(free: number, taken: number): string {
+    if (free <= 0) return 'Dolu'
+    if (taken <= 0) return free + ' boş'
+    return free + ' boş · ' + taken + ' dolu'
+  }
+
   const slotRows = times().map((t) => {
     const cp = store.capacityOf(sel, t)
     const cnt = store.bookedCount(sel, t)
@@ -329,7 +337,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
       actionLabel = '—'
       actionStyle = { ...actBase, border: '1px solid #EFE7DA', background: 'transparent', color: '#C0B5A6', cursor: 'default' }
     } else if (isAdmin && bk && bk.length) {
-      statusText = open > 0 ? open + ' yer kaldı' : 'Rezerve'
+      statusText = seatText(open, cnt)
       metaText = bk
         .map((b) => b.first + ' ' + b.last + ' · Villa ' + b.villa + (b.phone ? ' · ' + b.phone : ' · telefon yok'))
         .join('  |  ')
@@ -339,8 +347,8 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
       actionStyle = { ...actBase, border: '1px solid #E0C4B8', background: '#FBF3EF', color: '#94422A', cursor: 'pointer' }
       onAction = () => holder && askCancelAdmin(holder)
     } else if (isAdmin) {
-      statusText = past ? 'Geçti' : 'Boş'
-      metaText = past ? 'Rezervasyon yok' : 'Birebir seans, bir saat'
+      statusText = past ? 'Geçti' : seatText(open, cnt)
+      metaText = past ? 'Rezervasyon yok' : 'Bir saatlik seans'
       actionLabel = 'Misafir ekle'
       actionStyle = { ...actBase, border: '1px solid ' + accent, background: '#FFFDFA', color: accent, cursor: 'pointer' }
       onAction = () => openBooking(sel, t)
@@ -348,7 +356,9 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
       // The resident's own session — the only booking they may ever see.
       const soon = !past && hoursOut(sel, t) < win
       statusText = past ? 'Tamamlandı' : 'Rezervasyonunuz'
-      metaText = 'Bu seans sizin adınıza ayrıldı.'
+      metaText = past
+        ? 'Bu seans sizin adınıza ayrılmıştı.'
+        : 'Bu seans sizin adınıza ayrıldı · ' + seatText(open, cnt)
       actionLabel = past ? 'Tamamlandı' : soon ? 'Stüdyoyu arayın' : 'İptal et'
       actionStyle = {
         ...actBase,
@@ -366,14 +376,14 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
         actionLabel = 'Geçti'
         actionStyle = { ...actBase, border: '1px solid #EFE7DA', background: 'transparent', color: '#C0B5A6', cursor: 'default' }
       } else if (open > 0) {
-        statusText = showRemaining ? open + ' yer boş' : 'Boş'
-        metaText = signedIn ? 'Birebir seans, bir saat' : 'Rezervasyon için giriş yapın'
+        statusText = seatText(open, cnt)
+        metaText = signedIn ? 'Bir saatlik seans' : 'Rezervasyon için giriş yapın'
         actionLabel = signedIn ? 'Rezerve et' : 'Giriş yapın'
         actionStyle = { ...actBase, border: '1px solid ' + accent, background: accent, color: '#FFFDFA', cursor: 'pointer' }
         onAction = () => openBooking(sel, t)
       } else {
         statusText = 'Dolu'
-        metaText = 'Bu saat dolu'
+        metaText = cnt + ' kişi bu saati almış'
         actionLabel = 'Dolu'
         actionStyle = { ...actBase, border: '1px solid #EFE7DA', background: 'transparent', color: '#C0B5A6', cursor: 'default' }
       }
@@ -438,7 +448,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
 
   const tagline = isAdmin
     ? 'Yönetici görünümü — ayın tüm rezervasyonları, kapasiteleri ve kapalı günleri.'
-    : 'Birebir reformer seansları, her gün 08.00 – 20.00. Size uygun saati seçin.'
+    : 'Reformer seansları, her gün 08.00 – 20.00. Size uygun saati seçin.'
   const selectedSubline = selBlocked
     ? 'Stüdyo kapalı — bugün seans yok.'
     : showRemaining
@@ -451,7 +461,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   const formKicker = form ? (form.mode === 'edit' ? 'Rezervasyonu düzenle' : 'Yeni rezervasyon') : ''
   const formTitle = form ? timeLabel(form.time) : ''
   const formSubtitle = form
-    ? DAYS[(new Date(form.date + 'T00:00:00').getDay() + 6) % 7] + ', ' + prettyDate(form.date) + ' · birebir seans'
+    ? DAYS[(new Date(form.date + 'T00:00:00').getDay() + 6) % 7] + ', ' + prettyDate(form.date) + ' · bir saatlik seans'
     : ''
   const formCta = busy
     ? 'Kaydediliyor…'
