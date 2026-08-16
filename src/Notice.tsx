@@ -22,3 +22,12 @@ export function SetupNotice() {
     </Notice>
   )
 }
+
+/** Transient confirmation pill, matching the one inside the calendar view. */
+export function Toast({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', background: '#2B2620', color: '#FBF7F1', padding: '13px 22px', borderRadius: 999, fontSize: 13, zIndex: 60, maxWidth: '88vw', textAlign: 'center', animation: 'riseIn 0.2s ease both' }}>
+      {children}
+    </div>
+  )
+}

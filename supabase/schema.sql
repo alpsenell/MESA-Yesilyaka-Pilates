@@ -103,7 +103,8 @@ create table if not exists public.blocked_days (
 create table if not exists public.slot_capacity (
   date      date not null,
   slot_time text not null,
-  capacity  int  not null default 1 check (capacity between 0 and 4),
+  -- Two people per hour unless an admin changes this slot.
+  capacity  int  not null default 2 check (capacity between 0 and 4),
   primary key (date, slot_time)
 );
 
@@ -272,7 +273,7 @@ as $$
   select coalesce(b.date, c.date)           as date,
          coalesce(b.slot_time, c.slot_time) as slot_time,
          coalesce(b.booked, 0)              as booked,
-         coalesce(c.capacity, 1)            as capacity
+         coalesce(c.capacity, 2)            as capacity
   from b
   full outer join c on b.date = c.date and b.slot_time = c.slot_time;
 $$;
@@ -315,7 +316,7 @@ begin
 
   select coalesce(
            (select capacity from public.slot_capacity where date = p_date and slot_time = p_slot),
-           1)
+           2)
     into v_cap;
   select count(*) into v_booked from public.bookings where date = p_date and slot_time = p_slot;
   if v_booked >= v_cap then

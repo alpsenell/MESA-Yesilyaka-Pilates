@@ -16,6 +16,9 @@ import { DEFAULT_CONFIG, hoursOut, type Booking, type Config, type Role } from '
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
+/** Seats per hour when `slot_capacity` has no row for the slot. */
+export const DEFAULT_CAPACITY = 2
+
 export interface StudioStore {
   role: Role
   config: Config
@@ -112,8 +115,10 @@ export function useStudio(
 
   const key = (date: string, time: string) => `${date}|${time}`
 
+  // Two per hour unless an admin has set this slot explicitly. Must match the
+  // fallback in `availability()` / `book_slot()`.
   const capacityOf = (date: string, time: string) =>
-    isAdmin ? caps[key(date, time)] ?? 1 : availSlots[key(date, time)]?.capacity ?? 1
+    isAdmin ? caps[key(date, time)] ?? DEFAULT_CAPACITY : availSlots[key(date, time)]?.capacity ?? DEFAULT_CAPACITY
   const bookedCount = (date: string, time: string) =>
     isAdmin ? bySlot[key(date, time)]?.length ?? 0 : availSlots[key(date, time)]?.booked ?? 0
   const bookingsAt = (date: string, time: string): Booking[] | null =>

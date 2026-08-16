@@ -194,3 +194,26 @@ export async function checkIsAdmin(): Promise<boolean> {
   if (error) return false
   return data === true
 }
+
+/**
+ * Change the signed-in account's password.
+ *
+ * Supabase's `updateUser` does not ask for the current password, so we verify
+ * it first by re-authenticating against whatever address the session holds —
+ * a villa address for residents, an admin one for staff. That keeps a borrowed
+ * open tab from being enough to take an account over.
+ */
+export async function changePassword(current: string, next: string): Promise<AuthResult> {
+  if (next.length < 6) return { ok: false, error: 'Yeni şifre en az 6 karakter olmalıdır.' }
+
+  const { data, error } = await supabase.auth.getUser()
+  const email = data.user?.email
+  if (error || !email) return { ok: false, error: 'Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.' }
+
+  const check = await supabase.auth.signInWithPassword({ email, password: current })
+  if (check.error) return { ok: false, error: 'Mevcut şifreniz hatalı.' }
+
+  const { error: updateError } = await supabase.auth.updateUser({ password: next })
+  if (updateError) return { ok: false, error: authError(updateError.message) }
+  return { ok: true }
+}

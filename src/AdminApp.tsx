@@ -4,7 +4,8 @@ import App from './App'
 import AdminLogin from './AdminLogin'
 import AdminResidents from './AdminResidents'
 import AdminSessions from './AdminSessions'
-import Notice, { SetupNotice } from './Notice'
+import PasswordChange from './PasswordChange'
+import Notice, { SetupNotice, Toast } from './Notice'
 import { checkIsAdmin } from './auth'
 import { isConfigured, supabase } from './supabase'
 import { useStudio } from './useStudio'
@@ -34,7 +35,9 @@ function AdminGate() {
       setAdmin(undefined)
       return
     }
-    setAdmin(undefined)
+    // Deliberately not resetting to `undefined` here: changing your password
+    // re-authenticates, which fires a session event, and blanking the verdict
+    // would unmount the console — and the open dialog — mid-save.
     checkIsAdmin().then((ok) => {
       if (live) setAdmin(ok)
     })
@@ -97,14 +100,18 @@ const tabBtn = (on: boolean, narrow: boolean): CSSProperties => ({
 function AdminConsole({ username }: { username: string }) {
   const store = useStudio('admin')
   const [tab, setTab] = useState<Tab>('sessions')
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pwDone, setPwDone] = useState(false)
   const headerExtra = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
       <span style={{ fontSize: 12, color: '#8C8073', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{username}</span>
+      <button className="dc-btn-ghost" onClick={() => setPwOpen(true)} style={logoutBtn}>Şifre değiştir</button>
       <button className="dc-btn-ghost" onClick={() => supabase.auth.signOut()} style={logoutBtn}>Çıkış</button>
     </div>
   )
   // The calendar tab is App's own body, so it passes no replacement.
   return (
+    <>
     <App
       store={store}
       headerExtra={headerExtra}
@@ -140,5 +147,17 @@ function AdminConsole({ username }: { username: string }) {
               )
       }
     />
+    {pwOpen && (
+      <PasswordChange
+        onClose={() => setPwOpen(false)}
+        onDone={() => {
+          setPwOpen(false)
+          setPwDone(true)
+          setTimeout(() => setPwDone(false), 3200)
+        }}
+      />
+    )}
+    {pwDone && <Toast>Şifreniz güncellendi.</Toast>}
+    </>
   )
 }

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import App from './App'
 import ResidentAuth from './ResidentAuth'
-import { SetupNotice } from './Notice'
+import PasswordChange from './PasswordChange'
+import { SetupNotice, Toast } from './Notice'
 import { fetchUnseenNotices, markNoticesSeen, type CancellationNotice } from './api'
 import { fetchProfile, signOut, type Resident } from './auth'
 import { DAYS, prettyDate, timeLabel } from './pilates'
@@ -32,6 +33,8 @@ function ResidentInner() {
   const [profile, setProfile] = useState<Resident | null>(null)
   const [authOpen, setAuthOpen] = useState(false)
   const [notices, setNotices] = useState<CancellationNotice[]>([])
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pwDone, setPwDone] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
@@ -97,6 +100,9 @@ function ResidentInner() {
       <span style={{ fontSize: 12, color: '#8C8073' }}>
         {profile.first} {profile.last} · Villa {profile.villa}
       </span>
+      <button className="dc-btn-ghost" onClick={() => setPwOpen(true)} style={{ ...pillBtn, minHeight: 0, padding: '9px 16px', fontSize: 12 }}>
+        Şifre değiştir
+      </button>
       <button className="dc-btn-ghost" onClick={() => signOut()} style={{ ...pillBtn, minHeight: 0, padding: '9px 16px', fontSize: 12 }}>
         Çıkış
       </button>
@@ -122,6 +128,17 @@ function ResidentInner() {
       />
       {authOpen && <ResidentAuth onClose={() => setAuthOpen(false)} />}
       {notices.length > 0 && <NoticeModal notices={notices} onDismiss={dismissNotices} />}
+      {pwOpen && (
+        <PasswordChange
+          onClose={() => setPwOpen(false)}
+          onDone={() => {
+            setPwOpen(false)
+            setPwDone(true)
+            setTimeout(() => setPwDone(false), 3200)
+          }}
+        />
+      )}
+      {pwDone && <Toast>Şifreniz güncellendi.</Toast>}
     </>
   )
 }

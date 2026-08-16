@@ -70,7 +70,9 @@ In local dev, reach the admin build via `http://localhost:5173/?admin=1` (or
    their current passwords keep working, keeping the original in
    `admins.email`) then
    [`005-create-admin-function.sql`](supabase/migration-005-create-admin-function.sql)
-   (`create_admin` / `set_admin_password`).
+   (`create_admin` / `set_admin_password`) then
+   [`006-default-capacity-two.sql`](supabase/migration-006-default-capacity-two.sql)
+   (two people per hour by default).
 3. **Authentication → Providers → Email**: turn **Confirm email** *off*. This is
    not optional — the account addresses are synthetic and receive no mail, so
    a confirmation step cannot be completed and sign-up fails with *"Email
@@ -133,6 +135,11 @@ Configuration → Redirect URLs** so admin sessions are allowed from that origin
 
 ## Configuration
 
+Every hour seats **2** people unless an admin changes that slot (0–4, from the
+calendar tab). The default lives in three places that must agree:
+`DEFAULT_CAPACITY` in [`src/useStudio.ts`](src/useStudio.ts), and the
+`coalesce(…, 2)` fallbacks in `availability()` and `book_slot()`.
+
 Studio name, community label, phone, accent color, the cancellation window and
 the "show remaining counts" toggle live in `DEFAULT_CONFIG` in
 [`src/pilates.ts`](src/pilates.ts). The 12-hour cancellation window is also
@@ -156,7 +163,8 @@ src/useStudio.ts      Data + mutations hook (resident vs. admin)
 src/api.ts            Supabase calls (RPCs for residents, tables for admins)
 src/supabase.ts       Supabase client
 src/pilates.ts        Types, constants, date helpers, config
-src/Notice.tsx        Loading / setup / error screens
+src/PasswordChange.tsx Change your own password (residents and staff)
+src/Notice.tsx        Loading / setup / error screens + toast
 supabase/schema.sql   Tables, RLS, RPCs, seed data
 supabase/migration-002-resident-auth.sql
                       In-place upgrade: resident accounts
@@ -166,6 +174,8 @@ supabase/migration-004-admin-username.sql
                       In-place upgrade: staff sign in with a username
 supabase/migration-005-create-admin-function.sql
                       In-place upgrade: create_admin() / set_admin_password()
+supabase/migration-006-default-capacity-two.sql
+                      In-place upgrade: default slot capacity 1 → 2
 ```
 
 ## The admin console
@@ -183,6 +193,9 @@ against that resident and shown to them the next time they sign in, then marked
 seen. Guests added by an admin have no account, so their cancellations record
 the reason for the audit trail but notify nobody.
 
-Residents sign themselves up; there is no invite step. Forgotten passwords are
-handled by deleting the account and letting the household register again, or by
-setting a new password in **Authentication → Users** in Supabase.
+Residents sign themselves up; there is no invite step. Anyone signed in —
+resident or staff — can change their own password from the header
+("Şifre değiştir"); the current password is re-checked before the new one is
+accepted. A resident who has forgotten theirs needs an admin: delete the
+account and let the household register again. Staff passwords reset with
+`select public.set_admin_password('ayse', 'yeni-sifre');`.
