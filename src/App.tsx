@@ -95,9 +95,10 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
     toastTimer.current = setTimeout(() => setToast(''), 3200)
   }
 
-  // The admin console needs the numbers to run the studio; the resident
-  // calendar is governed by the config flag.
-  const showRemaining = isAdmin || (config.showRemaining ?? true)
+  // Availability counts are off for everyone, admins included. The per-slot
+  // capacity stepper on the day panel still shows exact figures, since that is
+  // the control an admin uses to change them.
+  const showRemaining = config.showRemaining ?? true
   const accent = config.accentColor ?? '#B0674C'
   const win = config.cancelWindowHours ?? 12
   const narrow = w < 900
