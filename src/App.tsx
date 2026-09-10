@@ -23,6 +23,8 @@ interface Cell {
   day?: number
   numStyle?: CSSProperties
   dotStyle?: CSSProperties
+  /** Bar along the bottom when the day has bookings; absent otherwise. */
+  markStyle?: CSSProperties
   onClick?: () => void
 }
 
@@ -233,11 +235,19 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
     const isPast = new Date(dIso + 'T23:59:59') < nowD
     const isBlocked = store.isBlocked(dIso)
     const isSel = dIso === sel
-    const full = dayStats(dIso).open === 0 && !isBlocked
+    const st = dayStats(dIso)
+    const full = st.open === 0 && !isBlocked
     // Nothing left to book: shown greyed out, and inert for residents.
     const unavailable = isPast || isBlocked || full
     const clickable = isAdmin || !unavailable
+    // "This day has bookings" — no names, no counts, which is all a resident
+    // may know about other people's sessions. Their own bookings get the
+    // accent colour so they can find them at a glance.
+    const mineHere = !isAdmin && store.mine.some((b) => b.date === dIso)
+    const markColor = mineHere ? accent : st.booked > 0 ? '#A79A8B' : null
     const style: CSSProperties = {
+      display: 'flex',
+      flexDirection: 'column',
       minHeight: cellH,
       padding: narrow ? '9px 6px' : '10px 11px',
       borderRadius: 12,
@@ -265,6 +275,9 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
         color: dIso === todayIso ? accent : unavailable ? '#B3A897' : '#2B2620',
       },
       dotStyle: { width: narrow ? 7 : 6, height: narrow ? 7 : 6, borderRadius: 999, background: dIso === todayIso ? accent : 'transparent', display: 'inline-block' },
+      markStyle: markColor
+        ? { marginTop: 'auto', alignSelf: 'flex-start', width: narrow ? 14 : 18, height: 4, borderRadius: 999, background: markColor, display: 'inline-block' }
+        : undefined,
       style,
       onClick: () => {
         if (clickable) store.setSelected(dIso)
@@ -556,6 +569,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
                       <span style={cell.dotStyle}></span>
                     </div>
                   )}
+                  {cell.markStyle && <span style={cell.markStyle}></span>}
                 </div>
               ))}
             </div>
@@ -563,8 +577,12 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, paddingTop: 18, marginTop: 16, borderTop: '1px solid #F0E8DA' }}>
               {[
                 { key: 'a', label: 'Boş saat var', style: { width: 10, height: 10, borderRadius: 3, background: '#FFFDFA', border: '1px solid #EDE4D6', display: 'inline-block' } as CSSProperties },
-                { key: 'b', label: 'Tamamen dolu', style: { width: 10, height: 10, borderRadius: 3, background: '#FBF6F1', border: '1px solid #E0C4B8', display: 'inline-block' } as CSSProperties },
+                { key: 'b', label: 'Dolu veya geçmiş', style: { width: 10, height: 10, borderRadius: 3, background: '#F4EFE7', border: '1px solid #EDE6DA', display: 'inline-block' } as CSSProperties },
                 { key: 'c', label: 'Stüdyo kapalı', style: { width: 10, height: 10, borderRadius: 3, background: 'repeating-linear-gradient(135deg,#F6F1E9,#F6F1E9 3px,#E9E0D2 3px,#E9E0D2 6px)', border: '1px solid #E9E0D2', display: 'inline-block' } as CSSProperties },
+                { key: 'e', label: 'Rezervasyon var', style: { width: 16, height: 4, borderRadius: 999, background: '#A79A8B', display: 'inline-block' } as CSSProperties },
+                ...(isAdmin
+                  ? []
+                  : [{ key: 'f', label: 'Rezervasyonunuz', style: { width: 16, height: 4, borderRadius: 999, background: accent, display: 'inline-block' } as CSSProperties }]),
                 { key: 'd', label: 'Bugün', style: { width: 10, height: 10, borderRadius: 999, background: accent, display: 'inline-block' } as CSSProperties },
               ].map((lg) => (
                 <div key={lg.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#7E7367' }}>

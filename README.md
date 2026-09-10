@@ -148,8 +148,11 @@ there is **off**, for residents and admins alike.
 
 The month grid carries no text beyond the date: a day is either open for
 booking or drawn as disabled — greyed out for past days and fully booked ones,
-hatched when the studio is closed — with the legend underneath explaining the
-three treatments. Residents cannot select a disabled day; admins still can, so
+hatched when the studio is closed. A short bar along the bottom of a day means
+it has at least one booking; it is accent-coloured when one of them is the
+signed-in resident's own. No names or numbers are shown, so residents learn
+only that a day is booked, not by whom or how heavily. The legend underneath
+explains every treatment. Residents cannot select a disabled day; admins still can, so
 they can manage it.
 
 Availability lives in the day panel instead, per hour: *2 boş*, *1 boş · 1
