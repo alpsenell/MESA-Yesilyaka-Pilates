@@ -72,7 +72,9 @@ In local dev, reach the admin build via `http://localhost:5173/?admin=1` (or
    [`005-create-admin-function.sql`](supabase/migration-005-create-admin-function.sql)
    (`create_admin` / `set_admin_password`) then
    [`006-default-capacity-two.sql`](supabase/migration-006-default-capacity-two.sql)
-   (two people per hour by default).
+   (two people per hour by default) then
+   [`007-fix-admin-auth-nulls.sql`](supabase/migration-007-fix-admin-auth-nulls.sql)
+   (repairs admins made by the first `create_admin`, which could not sign in).
 3. **Authentication → Providers → Email**: turn **Confirm email** *off*. This is
    not optional — the account addresses are synthetic and receive no mail, so
    a confirmation step cannot be completed and sign-up fails with *"Email
@@ -188,6 +190,8 @@ supabase/migration-005-create-admin-function.sql
                       In-place upgrade: create_admin() / set_admin_password()
 supabase/migration-006-default-capacity-two.sql
                       In-place upgrade: default slot capacity 1 → 2
+supabase/migration-007-fix-admin-auth-nulls.sql
+                      Fix: admins from create_admin() failing sign-in (500)
 ```
 
 ## The admin console

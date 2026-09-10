@@ -30,6 +30,7 @@ declare
   v_user  text;
   v_email text;
   v_id    uuid;
+  col     text;
 begin
   v_user := lower(btrim(coalesce(p_username, '')));
   if v_user !~ '^[a-z0-9._-]{2,32}$' then
@@ -65,6 +66,22 @@ begin
     jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
     '{}'::jsonb
   );
+
+  -- Supabase Auth reads these as non-nullable strings; NULL makes every
+  -- sign-in for this account fail with "Database error querying schema".
+  for col in
+    select column_name
+      from information_schema.columns
+     where table_schema = 'auth'
+       and table_name   = 'users'
+       and column_name in ('confirmation_token', 'recovery_token',
+                           'email_change_token_new', 'email_change_token_current',
+                           'email_change', 'phone_change', 'phone_change_token',
+                           'reauthentication_token')
+  loop
+    execute format('update auth.users set %I = '''' where id = $1 and %I is null', col, col)
+      using v_id;
+  end loop;
 
   insert into auth.identities (
     id, user_id, provider_id, provider, identity_data,
