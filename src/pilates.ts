@@ -66,8 +66,14 @@ export const MONTHS = [
   'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
 ]
 
+// Opening hours: the first session starts at START_H, the last one ends at
+// END_H (so the last bookable slot is 21.00 – 22.00).
 export const START_H = 8
-export const END_H = 20
+export const END_H = 22
+
+/** "08.00 – 22.00" — the opening hours as residents read them. */
+export const HOURS_LABEL =
+  String(START_H).padStart(2, '0') + '.00 – ' + String(END_H).padStart(2, '0') + '.00'
 
 export function iso(y: number, m: number, d: number): string {
   return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0')

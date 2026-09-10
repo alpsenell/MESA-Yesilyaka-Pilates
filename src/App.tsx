@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type
 import {
   DAYS,
   DAYS_SHORT,
+  HOURS_LABEL,
   MONTHS,
   hoursOut,
   iso,
@@ -448,12 +449,12 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
 
   const tagline = isAdmin
     ? 'Yönetici görünümü — ayın tüm rezervasyonları, kapasiteleri ve kapalı günleri.'
-    : 'Reformer seansları, her gün 08.00 – 20.00. Size uygun saati seçin.'
+    : 'Reformer seansları, her gün ' + HOURS_LABEL + '. Size uygun saati seçin.'
   const selectedSubline = selBlocked
     ? 'Stüdyo kapalı — bugün seans yok.'
     : showRemaining
       ? selStats.open + ' / ' + selStats.total + ' saat boş'
-      : 'Saat başı seanslar, 08.00 – 20.00'
+      : 'Saat başı seanslar, ' + HOURS_LABEL
   const policyNote = isAdmin
     ? 'Kapasite, ikili seanslar için 4 kişiye kadar çıkarılabilir. Buradan yapılan iptaller anında takvime yansır.'
     : 'Seansınıza ' + win + ' saat kalana kadar ücretsiz iptal. Sonrasında lütfen stüdyoyu arayın: ' + (config.studioPhone ?? '') + '.'

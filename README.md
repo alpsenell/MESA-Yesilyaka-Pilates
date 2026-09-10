@@ -2,7 +2,7 @@
 
 A booking system for the Pilates studio at the Yeşilyaka Su residential
 community. Residents register an account for their villa, sign in, and reserve
-one-on-one reformer sessions (08.00–20.00, one per hour); the studio manager
+reformer sessions (08.00–22.00, one-hour slots, two people each); the studio manager
 works the same calendar in a login-gated admin console to manage resident
 accounts, add guests, adjust per-slot capacity, edit or cancel bookings, and
 close days for maintenance.
