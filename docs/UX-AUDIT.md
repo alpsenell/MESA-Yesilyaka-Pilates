@@ -1,5 +1,13 @@
 # UX / UI Audit — Booking Calendar & Admin Console
 
+> **Status:** every P0, P1 and P2 item below is fixed on this branch, along
+> with most of P3. Still open, deliberately: the "Üye yönetimi" month
+> coupling (correctly labelled, low harm), a *server-side* capacity check for
+> admin inserts (a client-side guard now blocks overbooking in the UI; a
+> constraint would need a migration), unbounded backwards month navigation
+> (mitigated by the new "Bugün" button), and putting the selected *date* in
+> the URL (the admin tab now is).
+
 Audited: all of `src/` (calendar in `App.tsx`, admin console in `AdminApp.tsx` /
 `AdminSessions.tsx` / `AdminResidents.tsx`, auth and modals), cross-checked
 against `useStudio.ts`, `api.ts` and the SQL in `supabase/` to confirm which

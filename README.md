@@ -146,14 +146,15 @@ Studio name, community label, phone, accent color and the cancellation window
 live in `DEFAULT_CONFIG` in [`src/pilates.ts`](src/pilates.ts). `showRemaining`
 there is **off**, for residents and admins alike.
 
-The month grid carries no text beyond the date: a day is either open for
-booking or drawn as disabled — greyed out for past days and fully booked ones,
-hatched when the studio is closed. A short bar along the bottom of a day means
-it has at least one booking; it is accent-coloured when one of them is the
-signed-in resident's own. No names or numbers are shown, so residents learn
-only that a day is booked, not by whom or how heavily. The legend underneath
-explains every treatment. Residents cannot select a disabled day; admins still can, so
-they can manage it.
+The month grid carries no names: a day is open for booking, full (drawn in its
+own warm tint), past (greyed out) or hatched when the studio is closed. A
+short bar along the bottom of a day means it has at least one booking; it is
+accent-coloured when one of them is the signed-in resident's own. Residents
+learn only that a day is booked, not by whom or how heavily. Admins instead
+see each day's `booked/capacity` count in the cell — the privacy rule binds
+residents, not staff. The legend underneath explains every treatment.
+Residents cannot select a disabled day; admins still can, so they can manage
+it.
 
 Availability lives in the day panel instead, per hour: *2 boş*, *1 boş · 1
 dolu*, *Dolu*. Admins additionally get that slot's `booked / capacity` beside
@@ -204,7 +205,7 @@ Three tabs:
 | Tab | What it is for |
 | --- | --- |
 | **Seanslı üyeler** (default) | Who is coming. Every resident holding an upcoming session, nearest first, with their phone number and session list. "Takvimde aç" jumps to that day on the calendar. Guests added by an admin appear too, marked *Misafir*. |
-| **Takvim** | The booking calendar: per-slot capacity, closing days, adding guests, editing and cancelling bookings, and the per-resident month summary. |
+| **Takvim** | The booking calendar: per-slot capacity, closing days, adding guests (any hour with a free seat), editing and cancelling each booking individually, printing the selected day's attendance sheet, and the per-resident month summary. |
 | **Üye yönetimi** | Registered accounts, with total and upcoming session counts. Search, expand to see the month's sessions, edit name / villa / phone (existing bookings are relabelled automatically), or delete the account — which also removes the login and every booking it holds. |
 
 When an admin cancels a resident's session, a reason is mandatory: it is stored

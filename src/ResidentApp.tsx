@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import App from './App'
+import Modal from './Modal'
 import ResidentAuth from './ResidentAuth'
 import PasswordChange from './PasswordChange'
 import { SetupNotice, Toast } from './Notice'
@@ -97,7 +98,7 @@ function ResidentInner() {
 
   const headerExtra = profile ? (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: 12, color: '#8C8073' }}>
+      <span style={{ fontSize: 12, color: '#6E6357' }}>
         {profile.first} {profile.last} · Villa {profile.villa}
       </span>
       <button className="dc-btn-ghost" onClick={() => setPwOpen(true)} style={{ ...pillBtn, minHeight: 0, padding: '9px 16px', fontSize: 12 }}>
@@ -146,10 +147,9 @@ function ResidentInner() {
 /** "Your session was cancelled, and here's why" — shown once per notice. */
 function NoticeModal({ notices, onDismiss }: { notices: CancellationNotice[]; onDismiss: () => void }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(43, 38, 32, 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, zIndex: 55 }}>
-      <div style={{ width: '100%', maxWidth: 480, background: '#FFFDFA', borderRadius: 20, padding: 26, animation: 'riseIn 0.22s ease both', maxHeight: '92vh', overflow: 'auto' }}>
+    <Modal onClose={onDismiss} label="Stüdyodan bilgilendirme" maxWidth={480} zIndex={55}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 16 }}>
-          <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#A79A8B' }}>Stüdyodan bilgilendirme</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#7E7367' }}>Stüdyodan bilgilendirme</div>
           <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 30, lineHeight: 1.1 }}>
             {notices.length > 1 ? notices.length + ' seansınız iptal edildi' : 'Seansınız iptal edildi'}
           </div>
@@ -176,7 +176,6 @@ function NoticeModal({ notices, onDismiss }: { notices: CancellationNotice[]; on
             Anladım
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { adminDeleteResident, adminUpdateResident, fetchResidents, type AdminResident } from './api'
 import { MAX_VILLA, MIN_VILLA, isValidVilla, villaKey } from './auth'
 import type { Booking } from './pilates'
-import { MONTHS, prettyDate, timeLabel } from './pilates'
+import { MONTHS, prettyDate, telHref, timeLabel } from './pilates'
 
 const inputStyle: CSSProperties = { padding: 11, borderRadius: 10, border: '1px solid #E4DACB', background: '#FBF7F1', fontSize: 14, color: '#2B2620', outline: 'none' }
-const labelSpan: CSSProperties = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8C8073' }
+const labelSpan: CSSProperties = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#6E6357' }
 const smallBtn: CSSProperties = { padding: '9px 14px', minHeight: 38, borderRadius: 999, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#2B2620', fontSize: 12, cursor: 'pointer' }
 const dangerBtn: CSSProperties = { ...smallBtn, border: '1px solid #E0C4B8', background: '#FBF3EF', color: '#94422A' }
 
@@ -83,14 +83,7 @@ export default function AdminResidents({
       await load()
       onChanged()
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Kaydedilemedi.'
-      setError(
-        msg.includes('residents_villa_key_idx')
-          ? 'Bu villa numarası başka bir hesapta kayıtlı.'
-          : msg.includes('residents_villa_range')
-            ? `Villa numarası ${MIN_VILLA} ile ${MAX_VILLA} arasında olmalıdır.`
-            : msg,
-      )
+      setError(e instanceof Error ? e.message : 'Kaydedilemedi.')
     } finally {
       setBusy(false)
     }
@@ -119,7 +112,7 @@ export default function AdminResidents({
     <div style={{ background: '#FFFDFA', border: '1px solid #E9E0D2', borderRadius: 18, padding: narrow ? '16px 14px 18px' : '22px 22px 26px', marginTop: narrow ? 14 : 20 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, paddingBottom: 14, borderBottom: '1px solid #F0E8DA' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#A79A8B' }}>Kayıtlı sakinler</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#7E7367' }}>Kayıtlı sakinler</div>
           <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: narrow ? 24 : 30 }}>
             {loading ? 'Yükleniyor…' : rows.length + ' hesap'}
           </div>
@@ -141,7 +134,7 @@ export default function AdminResidents({
       )}
 
       {!loading && visible.length === 0 && (
-        <div style={{ padding: '22px 6px', fontSize: 13, color: '#8C8073', textAlign: 'center' }}>
+        <div style={{ padding: '22px 6px', fontSize: 13, color: '#6E6357', textAlign: 'center' }}>
           {rows.length === 0 ? 'Henüz kayıtlı sakin yok.' : 'Aramanızla eşleşen sakin yok.'}
         </div>
       )}
@@ -188,7 +181,7 @@ export default function AdminResidents({
                       {busy ? 'Kaydediliyor…' : 'Kaydet'}
                     </button>
                   </div>
-                  <div style={{ fontSize: 12, color: '#9C9083', textWrap: 'pretty' }}>
+                  <div style={{ fontSize: 12, color: '#7E7367', textWrap: 'pretty' }}>
                     Villa numarası aynı zamanda giriş adıdır — değiştirirseniz sakin yeni numarasıyla giriş yapar.
                   </div>
                 </div>
@@ -196,14 +189,14 @@ export default function AdminResidents({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                     <div style={{ fontSize: 15, fontWeight: 500 }}>{r.first} {r.last}</div>
-                    <div style={{ fontSize: 12, color: '#8C8073' }}>
+                    <div style={{ fontSize: 12, color: '#6E6357' }}>
                       Villa {r.villa}
-                      {r.phone ? ' · ' + r.phone : ' · telefon yok'} · {r.total} seans ({r.upcoming} yaklaşan)
+                      {r.phone ? <> · <a href={telHref(r.phone)}>{r.phone}</a></> : ' · telefon yok'} · {r.total} seans ({r.upcoming} yaklaşan)
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button onClick={() => setOpenId(open ? null : r.id)} style={smallBtn}>
-                      {open ? 'Gizle' : 'Seansları'}
+                      {open ? 'Gizle' : 'Seansları göster'}
                     </button>
                     <button onClick={() => startEdit(r)} style={smallBtn}>Düzenle</button>
                     {confirmId === r.id ? (
@@ -228,11 +221,11 @@ export default function AdminResidents({
 
               {open && !editing && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #EFE7DA', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A79A8B' }}>
+                  <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#7E7367' }}>
                     {MONTHS[month] + ' ' + year} seansları
                   </div>
                   {theirs.length === 0 ? (
-                    <div style={{ fontSize: 13, color: '#8C8073' }}>Bu ay rezervasyonu yok.</div>
+                    <div style={{ fontSize: 13, color: '#6E6357' }}>Bu ay rezervasyonu yok.</div>
                   ) : (
                     theirs.map((b) => (
                       <div key={b.id} style={{ fontSize: 13, color: '#6E6357' }}>
