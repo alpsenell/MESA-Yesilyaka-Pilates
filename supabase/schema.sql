@@ -335,7 +335,9 @@ begin
 end;
 $$;
 
--- Resident self-cancel: must own the booking and be outside the 12h window.
+-- Resident self-cancel: must own the booking and be outside the 24h window.
+-- Inside the window residents must contact site management; there is no
+-- self-service path — admins cancel on their behalf via admin_cancel_booking.
 create or replace function public.cancel_booking(p_id uuid)
 returns void
 language plpgsql
@@ -354,8 +356,8 @@ begin
     raise exception 'Bu rezervasyon size ait değil.';
   end if;
   v_start := (r.date + (r.slot_time || ':00')::time) at time zone 'Europe/Istanbul';
-  if v_start - now() < interval '12 hours' then
-    raise exception 'Seansa 12 saatten az kaldı — lütfen stüdyoyu arayın.';
+  if v_start - now() < interval '24 hours' then
+    raise exception 'Seansa 24 saatten az kaldı — iptal için lütfen site yönetimi ile iletişime geçin.';
   end if;
   delete from public.bookings where id = p_id;
 end;

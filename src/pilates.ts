@@ -35,7 +35,6 @@ export interface FormFields {
 export interface Config {
   studioName: string
   communityName: string
-  studioPhone: string
   accentColor: string
   cancelWindowHours: number
   showRemaining: boolean
@@ -44,9 +43,8 @@ export interface Config {
 export const DEFAULT_CONFIG: Config = {
   studioName: 'Pilates Stüdyosu',
   communityName: 'Yeşilyaka Su · Sadece site sakinleri',
-  studioPhone: '+90 232 000 00 00',
   accentColor: '#B0674C',
-  cancelWindowHours: 12,
+  cancelWindowHours: 24,
   // Residents see whether a slot is free, never how free it is: no "3 / 12
   // boş" on the calendar. Admins always see the counts regardless.
   showRemaining: false,
