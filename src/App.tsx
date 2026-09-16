@@ -92,7 +92,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   // the control an admin uses to change them.
   const showRemaining = config.showRemaining ?? true
   const accent = config.accentColor ?? '#B0674C'
-  const win = config.cancelWindowHours ?? 12
+  const win = config.cancelWindowHours ?? 24
   const narrow = w < 900
 
   const sel = store.selected
@@ -373,7 +373,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
       metaText = past
         ? 'Bu seans sizin adınıza ayrılmıştı.'
         : 'Bu seans sizin adınıza ayrıldı · ' + seatText(open, cnt)
-      actionLabel = past ? 'Tamamlandı' : soon ? 'Stüdyoyu arayın' : 'İptal et'
+      actionLabel = past ? 'Tamamlandı' : soon ? 'Yönetime başvurun' : 'İptal et'
       actionStyle = {
         ...actBase,
         border: '1px solid ' + (past || soon ? '#EFE7DA' : '#E0C4B8'),
@@ -433,7 +433,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
       when:
         DAYS[(new Date(b.date + 'T00:00:00').getDay() + 6) % 7] + ', ' + prettyDate(b.date) + ' · ' + timeLabel(b.time),
       who: 'Villa ' + b.villa + (b.phone ? ' · ' + b.phone : ''),
-      cancelLabel: past ? 'Tamamlandı' : soon ? 'Stüdyoyu arayın' : 'İptal et',
+      cancelLabel: past ? 'Tamamlandı' : soon ? 'Yönetime başvurun' : 'İptal et',
       cancelStyle: {
         ...actBase,
         border: '1px solid ' + (past || soon ? '#EFE7DA' : '#E0C4B8'),
@@ -470,7 +470,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
       : 'Saat başı seanslar, ' + HOURS_LABEL
   const policyNote = isAdmin
     ? 'Kapasite, ikili seanslar için 4 kişiye kadar çıkarılabilir. Buradan yapılan iptaller anında takvime yansır.'
-    : 'Seansınıza ' + win + ' saat kalana kadar ücretsiz iptal. Sonrasında lütfen stüdyoyu arayın: ' + (config.studioPhone ?? '') + '.'
+    : 'Seansınıza ' + win + ' saat kalana kadar ücretsiz iptal. Sonrasında iptal için lütfen site yönetimi ile iletişime geçin.'
 
   const formKicker = form ? (form.mode === 'edit' ? 'Rezervasyonu düzenle' : 'Yeni rezervasyon') : ''
   const formTitle = form ? timeLabel(form.time) : ''

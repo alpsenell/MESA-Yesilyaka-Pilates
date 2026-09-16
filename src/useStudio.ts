@@ -150,8 +150,8 @@ export function useStudio(
   }
 
   const cancel = async (booking: Booking, adminOverride: boolean, reason?: string): Promise<ActionResult> => {
-    if (!adminOverride && hoursOut(booking.date, booking.time) < (config.cancelWindowHours ?? 12)) {
-      return { ok: false, error: 'Seansa ' + (config.cancelWindowHours ?? 12) + ' saatten az kaldı — lütfen stüdyoyu arayın.' }
+    if (!adminOverride && hoursOut(booking.date, booking.time) < (config.cancelWindowHours ?? 24)) {
+      return { ok: false, error: 'Seansa ' + (config.cancelWindowHours ?? 24) + ' saatten az kaldı — iptal için lütfen site yönetimi ile iletişime geçin.' }
     }
     if (adminOverride && !reason?.trim()) {
       return { ok: false, error: 'İptal nedeni zorunludur.' }
