@@ -39,7 +39,8 @@ In local dev, reach the admin build via `http://localhost:5173/?admin=1` (or
   `auth.uid()`; name and villa can't be spoofed from the client. It also
   re-checks blocked days, past times, capacity and double-booking.
 - **Residents cancel only their own sessions** — `cancel_booking` verifies
-  ownership and the 12-hour window server-side.
+  ownership and the 24-hour window server-side. Inside the window they contact
+  site management, who cancel on their behalf.
 - **Admin cancellations require a reason.** `admin_cancel_booking` refuses an
   empty one, records it in `cancellation_notices` for the affected resident,
   and only then deletes the booking. The resident sees it the next time they
@@ -142,9 +143,9 @@ calendar tab). The default lives in three places that must agree:
 `DEFAULT_CAPACITY` in [`src/useStudio.ts`](src/useStudio.ts), and the
 `coalesce(…, 2)` fallbacks in `availability()` and `book_slot()`.
 
-Studio name, community label, phone, accent color and the cancellation window
-live in `DEFAULT_CONFIG` in [`src/pilates.ts`](src/pilates.ts). `showRemaining`
-there is **off**, for residents and admins alike.
+Studio name, community label, accent color and the cancellation window live in
+`DEFAULT_CONFIG` in [`src/pilates.ts`](src/pilates.ts). `showRemaining` there
+is **off**, for residents and admins alike.
 
 The month grid carries no names: a day is open for booking, full (drawn in its
 own warm tint), past (greyed out) or hatched when the studio is closed. A
@@ -160,9 +161,9 @@ Availability lives in the day panel instead, per hour: *2 boş*, *1 boş · 1
 dolu*, *Dolu*. Admins additionally get that slot's `booked / capacity` beside
 the – / + stepper, because that is the control for changing it. The
 `showRemaining` flag now only governs the two month-level summaries (the
-calendar header line and the selected day's free-hours count). The 12-hour cancellation window is also
-enforced server-side in `cancel_booking` (`supabase/schema.sql`) — change both
-if you adjust it.
+calendar header line and the selected day's free-hours count). The 24-hour cancellation window is also
+enforced server-side in `cancel_booking` (`supabase/schema.sql`,
+`supabase/migration-008-cancel-window-24h.sql`) — change both if you adjust it.
 
 ## Project structure
 

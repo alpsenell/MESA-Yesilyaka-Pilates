@@ -55,8 +55,6 @@ interface SlotAction {
   style: CSSProperties
   onClick?: () => void
   disabled?: boolean
-  /** Renders as a link (tel:) instead of a button. */
-  href?: string
 }
 
 interface SlotRowData {
@@ -134,9 +132,8 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   // the control an admin uses to change them.
   const showRemaining = config.showRemaining ?? true
   const accent = config.accentColor ?? '#B0674C'
-  const win = config.cancelWindowHours ?? 12
+  const win = config.cancelWindowHours ?? 24
   const narrow = w < 900
-  const studioTel = telHref(config.studioPhone ?? '')
 
   const sel = store.selected
   const y = store.year
@@ -498,8 +495,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
         ? 'Bu seans sizin adınıza ayrılmıştı.'
         : 'Bu seans sizin adınıza ayrıldı · ' + seatText(open, cnt)
       if (past) action = { label: 'Tamamlandı', style: disabledAct, disabled: true }
-      else if (soon)
-        action = { label: 'Stüdyoyu arayın', style: { ...actBase, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#2B2620', cursor: 'pointer' }, href: studioTel }
+      else if (soon) action = { label: 'Yönetime başvurun', style: disabledAct, disabled: true }
       else action = { label: 'İptal et', style: dangerAct, onClick: () => setConfirmCancel(own) }
     } else {
       // resident — counts only, no PII, no cross-resident cancel
@@ -546,13 +542,6 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
 
   function renderAction(action: SlotAction | null) {
     if (!action) return null
-    if (action.href) {
-      return (
-        <a href={action.href} style={{ ...action.style, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
-          {action.label}
-        </a>
-      )
-    }
     return (
       <button onClick={action.onClick} disabled={action.disabled} style={action.style}>
         {action.label}
@@ -569,8 +558,7 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
   function mineAction(b: Booking, past: boolean): SlotAction {
     const soon = !past && hoursOut(b.date, b.time) < win
     if (past) return { label: 'Tamamlandı', style: { ...disabledAct, flexShrink: 0 }, disabled: true }
-    if (soon)
-      return { label: 'Stüdyoyu arayın', style: { ...actBase, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#2B2620', cursor: 'pointer', flexShrink: 0 }, href: studioTel }
+    if (soon) return { label: 'Yönetime başvurun', style: { ...disabledAct, flexShrink: 0 }, disabled: true }
     return { label: 'İptal et', style: { ...dangerAct, flexShrink: 0 }, onClick: () => setConfirmCancel(b) }
   }
 
@@ -828,11 +816,9 @@ export default function App({ store, headerExtra, resident = null, onRequireLogi
             </div>
 
             <div style={{ fontSize: 12, color: '#7E7367', paddingTop: 14, textWrap: 'pretty' }}>
-              {isAdmin ? (
-                'Kapasite, ikili seanslar için 4 kişiye kadar çıkarılabilir. Buradan yapılan iptaller anında takvime yansır.'
-              ) : (
-                <>Seansınıza {win} saat kalana kadar ücretsiz iptal. Sonrasında lütfen stüdyoyu arayın: <a href={studioTel}>{config.studioPhone ?? ''}</a>.</>
-              )}
+              {isAdmin
+                ? 'Kapasite, ikili seanslar için 4 kişiye kadar çıkarılabilir. Buradan yapılan iptaller anında takvime yansır.'
+                : 'Seansınıza ' + win + ' saat kalana kadar ücretsiz iptal. Sonrasında iptal için lütfen site yönetimi ile iletişime geçin.'}
             </div>
           </div>
         </div>
