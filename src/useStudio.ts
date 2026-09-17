@@ -30,6 +30,8 @@ export interface StudioStore {
   setSelected(date: string): void
   prevMonth(): void
   nextMonth(): void
+  /** Jump back to the current month and select today. */
+  goToday(): void
   refresh(): void
   capacityOf(date: string, time: string): number
   bookedCount(date: string, time: string): number
@@ -166,14 +168,24 @@ export function useStudio(
     }
   }
 
+  // Optimistic: the stepper reflects the click immediately instead of waiting
+  // for a round-trip plus a full month refetch; on failure the value reverts.
   const setCapacity = async (date: string, time: string, delta: number): Promise<void> => {
+    const k = key(date, time)
     const cur = capacityOf(date, time)
     const next = Math.max(bookedCount(date, time), Math.min(4, cur + delta))
     if (next === cur) return
+    const prev = caps[k]
+    setCaps((c) => ({ ...c, [k]: next }))
     try {
       await adminSetCapacity(date, time, next)
-      await load()
     } catch (e) {
+      setCaps((c) => {
+        const reverted = { ...c }
+        if (prev === undefined) delete reverted[k]
+        else reverted[k] = prev
+        return reverted
+      })
       setError(errMessage(e))
     }
   }
@@ -203,6 +215,14 @@ export function useStudio(
     nextMonth: () => {
       setMonth((m) => (m === 11 ? 0 : m + 1))
       setYear((y) => (month === 11 ? y + 1 : y))
+    },
+    goToday: () => {
+      const t = new Date()
+      setYear(t.getFullYear())
+      setMonth(t.getMonth())
+      setSelected(
+        `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`,
+      )
     },
     refresh: load,
     capacityOf,

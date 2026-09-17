@@ -3,8 +3,8 @@ import { loginAdmin } from './auth'
 import { DEFAULT_CONFIG } from './pilates'
 
 const inputStyle: CSSProperties = { padding: 13, borderRadius: 10, border: '1px solid #E4DACB', background: '#FBF7F1', fontSize: 15, color: '#2B2620', outline: 'none' }
-const labelSpan: CSSProperties = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8C8073' }
-const revealBtn: CSSProperties = { position: 'absolute', right: 6, top: 6, bottom: 6, padding: '0 12px', borderRadius: 8, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#8C8073', fontSize: 12, cursor: 'pointer' }
+const labelSpan: CSSProperties = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#6E6357' }
+const revealBtn: CSSProperties = { position: 'absolute', right: 6, top: 6, bottom: 6, padding: '0 12px', borderRadius: 8, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#6E6357', fontSize: 12, cursor: 'pointer' }
 
 export default function AdminLogin() {
   const [username, setUsername] = useState('')
@@ -26,7 +26,7 @@ export default function AdminLogin() {
   return (
     <div style={{ minHeight: '100vh', background: '#F6F1E9', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ width: '100%', maxWidth: 400, background: '#FFFDFA', border: '1px solid #E9E0D2', borderRadius: 20, padding: 30 }}>
-        <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#9C9083' }}>{DEFAULT_CONFIG.communityName}</div>
+        <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#7E7367' }}>{DEFAULT_CONFIG.communityName}</div>
         <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 34, lineHeight: 1.05, padding: '6px 0 4px' }}>Yönetici girişi</div>
         <div style={{ fontSize: 13, color: '#7E7367', paddingBottom: 20 }}>Devam etmek için kullanıcı adınız ve şifrenizle giriş yapın.</div>
 
@@ -72,7 +72,7 @@ export default function AdminLogin() {
             {busy ? 'Giriş yapılıyor…' : 'Giriş yap'}
           </button>
         </form>
-        <div style={{ fontSize: 12, color: '#9C9083', paddingTop: 18, textWrap: 'pretty' }}>
+        <div style={{ fontSize: 12, color: '#7E7367', paddingTop: 18, textWrap: 'pretty' }}>
           Hesaplar stüdyo yöneticisi tarafından oluşturulur. Şifrenizi mi unuttunuz? Yöneticinizle iletişime geçin.
         </div>
       </div>

@@ -48,6 +48,51 @@ button {
   background: #fffdfa !important;
 }
 
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #b0674c;
+  outline-offset: 2px;
+}
+
+/* Below 16px, iOS Safari zooms the whole viewport when an input is focused. */
+@media (max-width: 900px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+.print-sheet {
+  display: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+  .print-sheet {
+    display: block;
+    color: #000;
+    font-size: 12px;
+  }
+  .print-sheet table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .print-sheet th,
+  .print-sheet td {
+    border: 1px solid #888;
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+}
+
 .dc-btn-ghost:hover {
   background: #f6f1e9 !important;
 }

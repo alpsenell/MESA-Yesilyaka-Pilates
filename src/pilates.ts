@@ -100,3 +100,8 @@ export function timeLabel(t: string): string {
   const h = parseInt(t, 10)
   return t.replace(':', '.') + ' – ' + String(h + 1).padStart(2, '0') + '.00'
 }
+
+/** `tel:` link target for a phone number as people type it. */
+export function telHref(phone: string): string {
+  return 'tel:' + phone.replace(/[^+\d]/g, '')
+}

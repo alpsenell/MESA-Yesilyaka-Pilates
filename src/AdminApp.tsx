@@ -82,6 +82,20 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'users', label: 'Üye yönetimi' },
 ]
 
+// The active tab lives in the URL hash, so a refresh keeps the tab and the
+// browser's Back button undoes tab jumps (e.g. "Takvimde aç").
+const TAB_HASH: Record<Tab, string> = { sessions: '#seanslar', calendar: '#takvim', users: '#uyeler' }
+function tabFromHash(): Tab {
+  switch (window.location.hash) {
+    case '#takvim':
+      return 'calendar'
+    case '#uyeler':
+      return 'users'
+    default:
+      return 'sessions'
+  }
+}
+
 const tabBtn = (on: boolean, narrow: boolean): CSSProperties => ({
   flex: narrow ? '1 1 auto' : '0 0 auto',
   padding: narrow ? '11px 12px' : '10px 20px',
@@ -93,18 +107,29 @@ const tabBtn = (on: boolean, narrow: boolean): CSSProperties => ({
   fontWeight: 500,
   whiteSpace: 'nowrap',
   background: on ? '#FFFDFA' : 'transparent',
-  color: on ? '#2B2620' : '#8C8073',
+  color: on ? '#2B2620' : '#6E6357',
   boxShadow: on ? '0 1px 3px rgba(43,38,32,0.10)' : 'none',
 })
 
 function AdminConsole({ username }: { username: string }) {
   const store = useStudio('admin')
-  const [tab, setTab] = useState<Tab>('sessions')
+  const [tab, setTabState] = useState<Tab>(tabFromHash)
   const [pwOpen, setPwOpen] = useState(false)
   const [pwDone, setPwDone] = useState(false)
+
+  useEffect(() => {
+    const onHash = () => setTabState(tabFromHash())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  const setTab = (t: Tab) => {
+    if (t === tab) return
+    window.location.hash = TAB_HASH[t]
+  }
   const headerExtra = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-      <span style={{ fontSize: 12, color: '#8C8073', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{username}</span>
+      <span style={{ fontSize: 12, color: '#6E6357', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{username}</span>
       <button className="dc-btn-ghost" onClick={() => setPwOpen(true)} style={logoutBtn}>Şifre değiştir</button>
       <button className="dc-btn-ghost" onClick={() => supabase.auth.signOut()} style={logoutBtn}>Çıkış</button>
     </div>

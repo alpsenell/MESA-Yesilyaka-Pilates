@@ -1,6 +1,25 @@
 import { supabase } from './supabase'
 import type { Booking } from './pilates'
 
+// The resident-facing RPCs raise Turkish messages already; direct table
+// writes (admin console) surface raw Postgres/driver English. Map the common
+// cases and pass everything else through untouched.
+function friendly(message: string): Error {
+  const m = message.toLowerCase()
+  if (m.includes('residents_villa_key')) return new Error('Bu villa numarası başka bir hesapta kayıtlı.')
+  if (m.includes('villa_range') || m.includes('villa_format')) {
+    return new Error('Villa numarası 1 ile 500 arasında bir sayı olmalıdır.')
+  }
+  if (m.includes('duplicate key')) return new Error('Bu kayıt zaten mevcut.')
+  if (m.includes('row-level security') || m.includes('permission denied')) {
+    return new Error('Bu işlem için yetkiniz yok. Oturumunuz sona ermiş olabilir — yeniden giriş yapmayı deneyin.')
+  }
+  if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('load failed')) {
+    return new Error('Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.')
+  }
+  return new Error(message)
+}
+
 // ---------------------------------------------------------------------------
 // Row <-> client mapping. The DB uses snake_case columns; the UI uses the
 // original component's field names (time / first / last).
@@ -67,8 +86,8 @@ export async function fetchAvailability(year: number, month: number): Promise<Mo
     supabase.rpc('availability', { p_year: year, p_month: month + 1 }),
     supabase.from('blocked_days').select('date').gte('date', monthBounds(year, month).lo).lte('date', monthBounds(year, month).hi),
   ])
-  if (e1) throw e1
-  if (e2) throw e2
+  if (e1) throw friendly(e1.message)
+  if (e2) throw friendly(e2.message)
   const slots: Record<string, { booked: number; capacity: number }> = {}
   for (const row of (avail ?? []) as Array<{ date: string; slot_time: string; booked: number; capacity: number }>) {
     slots[`${row.date}|${row.slot_time}`] = { booked: row.booked, capacity: row.capacity }
@@ -83,7 +102,7 @@ export async function bookSlot(input: BookingInput): Promise<void> {
     p_slot: input.time,
     p_phone: input.phone,
   })
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
 }
 
 /** The signed-in resident's own bookings — RLS hides everyone else's. */
@@ -94,13 +113,13 @@ export async function fetchMyBookings(residentId: string): Promise<Booking[]> {
     .eq('resident_id', residentId)
     .order('date')
     .order('slot_time')
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
   return ((data ?? []) as BookingRow[]).map(toBooking)
 }
 
 export async function cancelBookingResident(id: string): Promise<void> {
   const { error } = await supabase.rpc('cancel_booking', { p_id: id })
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
 }
 
 // ---------------------------------------------------------------------------
@@ -113,9 +132,9 @@ export async function fetchMonthAdmin(year: number, month: number): Promise<Mont
     supabase.from('slot_capacity').select('*').gte('date', lo).lte('date', hi),
     supabase.from('blocked_days').select('date').gte('date', lo).lte('date', hi),
   ])
-  if (bk.error) throw bk.error
-  if (cap.error) throw cap.error
-  if (blk.error) throw blk.error
+  if (bk.error) throw friendly(bk.error.message)
+  if (cap.error) throw friendly(cap.error.message)
+  if (blk.error) throw friendly(blk.error.message)
 
   const bySlot: Record<string, Booking[]> = {}
   for (const row of (bk.data ?? []) as BookingRow[]) {
@@ -139,7 +158,7 @@ export async function fetchUpcomingBookings(): Promise<Booking[]> {
     .gte('date', today)
     .order('date')
     .order('slot_time')
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
   return ((data ?? []) as BookingRow[]).map(toBooking)
 }
 
@@ -152,7 +171,7 @@ export async function adminCreateBooking(input: BookingInput): Promise<void> {
     villa: input.villa.trim().toUpperCase(),
     phone: input.phone.trim(),
   })
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
 }
 
 export async function adminUpdateBooking(id: string, input: BookingInput): Promise<void> {
@@ -165,7 +184,7 @@ export async function adminUpdateBooking(id: string, input: BookingInput): Promi
       phone: input.phone.trim(),
     })
     .eq('id', id)
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
 }
 
 /**
@@ -175,14 +194,14 @@ export async function adminUpdateBooking(id: string, input: BookingInput): Promi
  */
 export async function adminCancelBooking(id: string, reason: string): Promise<void> {
   const { error } = await supabase.rpc('admin_cancel_booking', { p_id: id, p_reason: reason })
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
 }
 
 export async function adminSetCapacity(date: string, time: string, capacity: number): Promise<void> {
   const { error } = await supabase
     .from('slot_capacity')
     .upsert({ date, slot_time: time, capacity }, { onConflict: 'date,slot_time' })
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +223,7 @@ export async function fetchUnseenNotices(residentId: string): Promise<Cancellati
     .eq('resident_id', residentId)
     .is('seen_at', null)
     .order('created_at', { ascending: false })
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
   return (
     (data ?? []) as Array<{ id: string; date: string; slot_time: string; reason: string; created_at: string }>
   ).map((n) => ({ id: n.id, date: n.date, time: n.slot_time, reason: n.reason, createdAt: n.created_at }))
@@ -212,7 +231,7 @@ export async function fetchUnseenNotices(residentId: string): Promise<Cancellati
 
 export async function markNoticesSeen(): Promise<void> {
   const { error } = await supabase.rpc('mark_notices_seen')
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
 }
 
 export interface AdminResident {
@@ -228,7 +247,7 @@ export interface AdminResident {
 
 export async function fetchResidents(): Promise<AdminResident[]> {
   const { data, error } = await supabase.rpc('admin_residents')
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
   return (
     (data ?? []) as Array<{
       id: string
@@ -266,21 +285,21 @@ export async function adminUpdateResident(
       phone: input.phone.trim(),
     })
     .eq('id', id)
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
 }
 
 /** Remove the account, its profile and all of its bookings. */
 export async function adminDeleteResident(id: string): Promise<void> {
   const { error } = await supabase.rpc('admin_delete_resident', { p_id: id })
-  if (error) throw new Error(error.message)
+  if (error) throw friendly(error.message)
 }
 
 export async function adminSetBlocked(date: string, blocked: boolean): Promise<void> {
   if (blocked) {
     const { error } = await supabase.from('blocked_days').upsert({ date }, { onConflict: 'date' })
-    if (error) throw new Error(error.message)
+    if (error) throw friendly(error.message)
   } else {
     const { error } = await supabase.from('blocked_days').delete().eq('date', date)
-    if (error) throw new Error(error.message)
+    if (error) throw friendly(error.message)
   }
 }

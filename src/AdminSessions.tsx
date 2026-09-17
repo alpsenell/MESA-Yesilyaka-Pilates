@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { fetchUpcomingBookings } from './api'
-import { DAYS, prettyDate, slotStart, timeLabel, now, type Booking } from './pilates'
+import { DAYS, prettyDate, slotStart, telHref, timeLabel, now, type Booking } from './pilates'
 
 const inputStyle: CSSProperties = { padding: 11, borderRadius: 10, border: '1px solid #E4DACB', background: '#FBF7F1', fontSize: 14, color: '#2B2620', outline: 'none' }
 const smallBtn: CSSProperties = { padding: '9px 14px', minHeight: 38, borderRadius: 999, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#2B2620', fontSize: 12, cursor: 'pointer' }
@@ -82,7 +82,7 @@ export default function AdminSessions({
     <div style={{ background: '#FFFDFA', border: '1px solid #E9E0D2', borderRadius: 18, padding: narrow ? '16px 14px 18px' : '22px 22px 26px' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, paddingBottom: 14, borderBottom: '1px solid #F0E8DA' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#A79A8B' }}>Seansı olan üyeler</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#7E7367' }}>Seansı olan üyeler</div>
           <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: narrow ? 24 : 30 }}>
             {loading ? 'Yükleniyor…' : visible.length + ' kişi · ' + totalSessions + ' seans'}
           </div>
@@ -104,7 +104,7 @@ export default function AdminSessions({
       )}
 
       {!loading && visible.length === 0 && (
-        <div style={{ padding: '22px 6px', fontSize: 13, color: '#8C8073', textAlign: 'center' }}>
+        <div style={{ padding: '22px 6px', fontSize: 13, color: '#6E6357', textAlign: 'center' }}>
           {people.size === 0 ? 'Yaklaşan seans yok.' : 'Aramanızla eşleşen üye yok.'}
         </div>
       )}
@@ -119,23 +119,23 @@ export default function AdminSessions({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 15, fontWeight: 500 }}>{p.name}</span>
-                    <span style={{ fontSize: 12, color: '#8C8073' }}>Villa {p.villa}</span>
+                    <span style={{ fontSize: 12, color: '#6E6357' }}>Villa {p.villa}</span>
                     {p.isGuest && (
-                      <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#A79A8B', border: '1px solid #EFE7DA', borderRadius: 999, padding: '2px 8px' }}>
+                      <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#7E7367', border: '1px solid #EFE7DA', borderRadius: 999, padding: '2px 8px' }}>
                         Misafir
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: 12, color: '#8C8073' }}>
+                  <div style={{ fontSize: 12, color: '#6E6357' }}>
                     Sıradaki: {whenLabel(next)}
-                    {p.phone ? ' · ' + p.phone : ''}
+                    {p.phone ? <> · <a href={telHref(p.phone)}>{p.phone}</a></> : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 12, fontWeight: 500, color: '#6E6357', background: '#F0E8DA', borderRadius: 999, padding: '5px 11px', whiteSpace: 'nowrap' }}>
                     {p.bookings.length} seans
                   </span>
-                  <button onClick={() => setOpenKey(open ? null : p.key)} style={smallBtn}>{open ? 'Gizle' : 'Seansları'}</button>
+                  <button onClick={() => setOpenKey(open ? null : p.key)} style={smallBtn}>{open ? 'Gizle' : 'Seansları göster'}</button>
                 </div>
               </div>
 

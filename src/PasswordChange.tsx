@@ -1,9 +1,10 @@
 import { useState, type CSSProperties, type FormEvent } from 'react'
+import Modal from './Modal'
 import { changePassword } from './auth'
 
 const inputStyle: CSSProperties = { padding: 13, borderRadius: 10, border: '1px solid #E4DACB', background: '#FBF7F1', fontSize: 15, color: '#2B2620', outline: 'none' }
-const labelSpan: CSSProperties = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8C8073' }
-const revealBtn: CSSProperties = { position: 'absolute', right: 6, top: 6, bottom: 6, padding: '0 12px', borderRadius: 8, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#8C8073', fontSize: 12, cursor: 'pointer' }
+const labelSpan: CSSProperties = { fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#6E6357' }
+const revealBtn: CSSProperties = { position: 'absolute', right: 6, top: 6, bottom: 6, padding: '0 12px', borderRadius: 8, border: '1px solid #E4DACB', background: '#FFFDFA', color: '#6E6357', fontSize: 12, cursor: 'pointer' }
 
 /**
  * Change the signed-in account's password. Works for residents and staff
@@ -69,16 +70,9 @@ export default function PasswordChange({ onClose, onDone }: { onClose: () => voi
   )
 
   return (
-    <div
-      onClick={() => !busy && onClose()}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(43, 38, 32, 0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, zIndex: 50 }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 440, background: '#FFFDFA', borderRadius: 20, padding: 26, animation: 'riseIn 0.22s ease both', maxHeight: '92vh', overflow: 'auto' }}
-      >
+    <Modal onClose={onClose} closable={!busy} label="Şifre değiştir" maxWidth={440} zIndex={50}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 18 }}>
-          <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#A79A8B' }}>Hesap</div>
+          <div style={{ fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#7E7367' }}>Hesap</div>
           <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 30, lineHeight: 1.1 }}>Şifre değiştir</div>
           <div style={{ fontSize: 13, color: '#7E7367', textWrap: 'pretty' }}>
             Güvenlik için önce mevcut şifrenizi girin.
@@ -114,7 +108,6 @@ export default function PasswordChange({ onClose, onDone }: { onClose: () => voi
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
